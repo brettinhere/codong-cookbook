@@ -1,0 +1,88 @@
+# Redis-backed Job Queue
+# Producer enqueues jobs; worker picks them up and processes them
+# codong run 66-job-queue.cod -- worker    (start consuming)
+# codong run 66-job-queue.cod -- enqueue   (push test jobs)
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+QUEUE   = "jobs:default"
+FAILED  = "jobs:failed"
+RESULTS = "jobs:results"
+
+fn enqueue(job_type, payload) {
+    job = json.encode({
+        id      : str(time.unix()) + str(math.floor(math.random() * 9999)),
+        type    : job_type,
+        payload : payload,
+        enqueued: time.now().format("YYYY-MM-DD HH:mm:ss"),
+        retries : 0,
+    })
+    redis.lpush(QUEUE, job)
+    print("Enqueued: {job_type} → {json.encode(payload)}")
+}
+
+fn process_job(job) {
+    match job.type {
+        "send_email" => {
+            print("  → Sending email to {job.payload.to} ...")
+            time.sleep(100)   # simulate work
+            return {ok: true, msg: "email sent"}
+        }
+        "resize_image" => {
+            print("  → Resizing {job.payload.path} to {job.payload.size} ...")
+            time.sleep(200)
+            return {ok: true, msg: "resized"}
+        }
+        "generate_report" => {
+            print("  → Generating report for user {job.payload.user_id} ...")
+            time.sleep(300)
+            return {ok: true, msg: "report ready"}
+        }
+        _ => {
+            return {ok: false, error: "unknown job type: {job.type}"}
+        }
+    }
+}
+
+fn run_worker() {
+    print("Worker started. Listening on queue: {QUEUE}")
+    while true {
+        raw = redis.brpop(QUEUE, timeout: 5)
+        if raw == "" { continue }
+
+        job = json.parse(raw)
+        ts  = time.now().format("HH:mm:ss")
+        print("[{ts}] Processing job {job.id} ({job.type})")
+
+        result = process_job(job)
+
+        if result.ok {
+            redis.hset(RESULTS, job.id, json.encode({done: true, result: result}))
+        } else {
+            job.retries = job.retries + 1
+            if job.retries < 3 {
+                redis.lpush(QUEUE, json.encode(job))
+                print("  ↺ Requeued (attempt {job.retries}/3)")
+            } else {
+                redis.lpush(FAILED, json.encode(job))
+                print("  ✗ Moved to dead-letter queue")
+            }
+        }
+    }
+}
+
+fn run_enqueue() {
+    enqueue("send_email",      {to: "alice@example.com", subject: "Welcome!"})
+    enqueue("resize_image",    {path: "uploads/photo.jpg", size: "800x600"})
+    enqueue("generate_report", {user_id: 42, period: "monthly"})
+    enqueue("send_email",      {to: "bob@example.com", subject: "Invoice"})
+    enqueue("unknown_job",     {data: "test"})
+    print("5 jobs enqueued.")
+}
+
+cmd = env.args()[0] ?? "worker"
+match cmd {
+    "worker"  => run_worker()
+    "enqueue" => run_enqueue()
+    _ => print("Usage: codong run 66-job-queue.cod -- [worker|enqueue]")
+}

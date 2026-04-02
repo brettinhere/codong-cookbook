@@ -1,0 +1,47 @@
+# JSON Lint & Formatter CLI
+# Validate and pretty-print JSON files
+# codong run 53-json-lint-cli.cod -- input.json
+# codong run 53-json-lint-cli.cod -- input.json --compact
+# codong run 53-json-lint-cli.cod -- input.json --check
+
+args    = env.args()
+infile  = args[0] ?? ""
+mode    = args[1] ?? "--pretty"   # --pretty | --compact | --check
+
+if infile == "" {
+    print("Usage: codong run 53-json-lint-cli.cod -- <file.json> [--pretty|--compact|--check]")
+    env.exit(1)
+}
+
+if !fs.exists(infile) {
+    print("Error: file not found: {infile}")
+    env.exit(1)
+}
+
+raw = fs.read(infile)
+
+# Try to parse
+data = json.parse(raw)
+if data.is_err() {
+    print("✗ Invalid JSON: {data.error()}")
+    env.exit(1)
+}
+
+match mode {
+    "--check" => {
+        size = raw.len()
+        keys = 0
+        if data.type() == "map" { keys = data.keys().len() }
+        print("✓ Valid JSON")
+        print("  File size : {size} bytes")
+        print("  Root type : {data.type()}")
+        if data.type() == "list"  { print("  Array len : {data.len()}") }
+        if data.type() == "map"   { print("  Top keys  : {data.keys().join(', ')}") }
+    }
+    "--compact" => {
+        print(json.encode(data))
+    }
+    _ => {
+        print(json.pretty(data))
+    }
+}

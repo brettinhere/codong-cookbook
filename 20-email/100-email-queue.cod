@@ -1,0 +1,108 @@
+# Email Queue with Redis + Retry + Rate Limiting
+# Enqueue emails, drain the queue respecting provider rate limits
+# codong run 100-email-queue.cod -- worker     (drain queue)
+# codong run 100-email-queue.cod -- enqueue    (add test emails)
+# codong run 100-email-queue.cod -- status     (show queue depth)
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+QUEUE_KEY   = "email:queue"
+FAILED_KEY  = "email:failed"
+SENT_KEY    = "email:sent_count"
+MAX_RETRIES = 3
+RATE_LIMIT  = 14    # emails per second (SendGrid free = 100/day ≈ safer to throttle)
+
+fn enqueue_email(to, subject, html, priority) {
+    msg = json.encode({
+        id       : crypto.random_hex(8),
+        to       : to,
+        subject  : subject,
+        html     : html,
+        retries  : 0,
+        priority : priority ?? 5,
+        queued_at: time.now().format("YYYY-MM-DD HH:mm:ss"),
+    })
+    redis.zadd(QUEUE_KEY, msg, priority ?? 5)
+}
+
+fn send_email_now(msg) {
+    # Real impl would call email.send() here
+    time.sleep(10)   # simulate send latency
+    if math.random() < 0.05 { error("SMTP timeout") }   # 5% failure rate
+    return true
+}
+
+fn run_worker() {
+    print("Email worker started (rate limit: {RATE_LIMIT}/s)\n")
+
+    while true {
+        # Get next email (lowest score = highest priority)
+        items = redis.zrange(QUEUE_KEY, 0, 0, with_scores: true)
+        if items.len() == 0 {
+            time.sleep(1000)
+            continue
+        }
+
+        raw = items[0].value
+        redis.zrem(QUEUE_KEY, raw)
+        msg = json.parse(raw)
+
+        ts = time.now().format("HH:mm:ss")
+        result = try(fn() { send_email_now(msg) })
+
+        if !result.is_err() {
+            redis.incr(SENT_KEY)
+            print("[{ts}] ✓ Sent → {msg.to}  subject: {msg.subject.slice(0,40)}")
+        } else {
+            msg.retries = msg.retries + 1
+            msg.last_error = result.error()
+            if msg.retries < MAX_RETRIES {
+                # Exponential backoff: re-add with degraded priority
+                new_priority = msg.priority + msg.retries * 10
+                redis.zadd(QUEUE_KEY, json.encode(msg), new_priority)
+                print("[{ts}] ↺ Retry {msg.retries}/{MAX_RETRIES} → {msg.to}")
+            } else {
+                redis.lpush(FAILED_KEY, json.encode(msg))
+                print("[{ts}] ✗ Failed → {msg.to}  error: {msg.last_error}")
+            }
+        }
+
+        # Rate limit: stay under provider threshold
+        time.sleep(1000 / RATE_LIMIT)
+    }
+}
+
+fn enqueue_test() {
+    priority_emails = [
+        {to: "ceo@example.com",    subject: "Critical: Payment failure",        priority: 1},
+        {to: "alice@example.com",  subject: "Your order has shipped",            priority: 5},
+        {to: "bob@example.com",    subject: "Weekly digest",                     priority: 9},
+        {to: "charlie@example.com",subject: "Welcome to Codong!",               priority: 3},
+        {to: "diana@example.com",  subject: "Your trial expires in 3 days",      priority: 4},
+    ]
+    priority_emails.each(fn(e) {
+        enqueue_email(e.to, e.subject, "<p>{e.subject}</p>", e.priority)
+        print("  Queued [{e.priority}] {e.subject} → {e.to}")
+    })
+    depth = redis.zcard(QUEUE_KEY)
+    print("\nQueue depth: {depth}")
+}
+
+fn show_status() {
+    depth  = redis.zcard(QUEUE_KEY)
+    failed = redis.llen(FAILED_KEY)
+    sent   = redis.get(SENT_KEY) ?? "0"
+    print("\n── Email Queue Status ───────────────────")
+    print("  Queued  : {depth}")
+    print("  Failed  : {failed}")
+    print("  Sent    : {sent}")
+    print("────────────────────────────────────────")
+}
+
+cmd = env.args()[0] ?? "status"
+match cmd {
+    "worker"  => run_worker()
+    "enqueue" => enqueue_test()
+    "status"  => show_status()
+    _ => print("Usage: codong run 100-email-queue.cod -- [worker|enqueue|status]")
+}

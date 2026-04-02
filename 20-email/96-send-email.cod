@@ -1,0 +1,71 @@
+# Send Transactional Email via SMTP
+# Plain text + HTML email with attachments via SMTP or SendGrid
+# codong run 96-send-email.cod
+
+SMTP_HOST = env.get("SMTP_HOST")     ?? "smtp.gmail.com"
+SMTP_PORT = int(env.get("SMTP_PORT") ?? "587")
+SMTP_USER = env.get("SMTP_USER")     ?? ""
+SMTP_PASS = env.get("SMTP_PASS")     ?? ""
+FROM_ADDR = env.get("FROM_EMAIL")    ?? "no-reply@example.com"
+
+fn send_email(to, subject, text_body, html_body, attachments) {
+    email.send({
+        smtp: {host: SMTP_HOST, port: SMTP_PORT, user: SMTP_USER, pass: SMTP_PASS},
+        from: FROM_ADDR,
+        to: to,
+        subject: subject,
+        text: text_body,
+        html: html_body ?? "",
+        attachments: attachments ?? [],
+    })
+}
+
+# Example 1: Simple welcome email
+send_email(
+    "alice@example.com",
+    "Welcome to Codong!",
+    "Hi Alice,\n\nWelcome aboard! Your account is ready.\n\nThe Codong Team",
+    "<h2>Welcome to Codong!</h2><p>Hi Alice,</p><p>Your account is ready. Start building today!</p>",
+    []
+)
+print("✓ Welcome email sent")
+
+# Example 2: Order confirmation with attachment
+invoice_html = "<h3>Invoice #1042</h3><table><tr><td>Widget x2</td><td>$19.98</td></tr></table>"
+send_email(
+    "bob@example.com",
+    "Order #1042 Confirmed",
+    "Hi Bob,\nYour order #1042 has been confirmed. Total: $19.98\n\nThank you!",
+    "<h3>Order Confirmed</h3>" + invoice_html,
+    [{path: "invoices/1042.pdf", name: "Invoice-1042.pdf"}]
+)
+print("✓ Order confirmation sent")
+
+# Example 3: Password reset
+reset_token = crypto.random_hex(32)
+reset_link  = "https://app.example.com/reset?token={reset_token}"
+send_email(
+    "charlie@example.com",
+    "Reset your password",
+    "Click this link to reset your password (expires in 1 hour):\n{reset_link}",
+    "<p>Click to <a href='{reset_link}'>reset your password</a> (expires in 1 hour).</p>",
+    []
+)
+print("✓ Password reset email sent")
+
+# Example 4: Bulk email with personalization
+subscribers = [
+    {email: "d@example.com", name: "Diana", plan: "Pro"},
+    {email: "e@example.com", name: "Eve",   plan: "Starter"},
+]
+
+subscribers.each(fn(sub) {
+    send_email(
+        sub.email,
+        "Your {sub.plan} plan is expiring soon",
+        "Hi {sub.name},\nYour {sub.plan} plan expires in 7 days.\nRenew at https://example.com/billing",
+        "<p>Hi {sub.name}, your <strong>{sub.plan}</strong> plan expires in 7 days.</p>",
+        []
+    )
+    print("✓ Renewal reminder sent to {sub.name}")
+})

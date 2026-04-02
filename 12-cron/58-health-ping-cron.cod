@@ -1,0 +1,40 @@
+# Health Ping Cron Job
+# Check all production endpoints every 5 minutes, alert if any are down
+# Cron: */5 * * * * codong run /path/to/58-health-ping-cron.cod
+
+ALERT_WEBHOOK = env.get("SLACK_WEBHOOK_URL")
+
+endpoints = [
+    {name: "API Gateway",      url: "https://api.example.com/health",    expect: 200},
+    {name: "Web Frontend",     url: "https://app.example.com",           expect: 200},
+    {name: "Auth Service",     url: "https://auth.example.com/ping",     expect: 200},
+    {name: "Admin Panel",      url: "https://admin.example.com/health",  expect: 200},
+    {name: "Docs Site",        url: "https://docs.example.com",          expect: 200},
+]
+
+ts     = time.now().format("YYYY-MM-DD HH:mm:ss")
+failed = []
+
+endpoints.each(fn(ep) {
+    start = time.unix()
+    resp  = http.get(ep.url, timeout: 5000)
+    ms    = (time.unix() - start) * 1000
+
+    if resp.is_err() or resp.status != ep.expect {
+        status = resp.is_err() ? "TIMEOUT" : str(resp.status)
+        print("[{ts}] ✗ {ep.name} — {status} ({ms}ms)")
+        failed.push({name: ep.name, url: ep.url, status: status, ms: ms})
+    } else {
+        print("[{ts}] ✓ {ep.name} — {resp.status} ({ms}ms)")
+    }
+})
+
+# Send Slack alert if anything is down
+if failed.len() > 0 and ALERT_WEBHOOK != "" {
+    text = "🔴 *Health Check Failed* at {ts}\n"
+    failed.each(fn(f) {
+        text = text + "• {f.name}: {f.status} — {f.url}\n"
+    })
+    http.post(ALERT_WEBHOOK, body: {text: text})
+    print("Alert sent to Slack.")
+}

@@ -1,0 +1,95 @@
+# Strategy Pattern
+# Swap algorithms at runtime: sorting, pricing, payment processing
+# codong run 87-strategy-pattern.cod
+
+# ── Strategy: Sorting ────────────────────────────────────────────────────────
+
+fn bubble_sort(arr) {
+    a = arr.slice(0, arr.len())
+    n = a.len()
+    i = 0
+    while i < n {
+        j = 0
+        while j < n - i - 1 {
+            if a[j] > a[j+1] {
+                tmp   = a[j]
+                a[j]  = a[j+1]
+                a[j+1] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return a
+}
+
+fn merge_sort(arr) {
+    if arr.len() <= 1 { return arr }
+    mid   = math.floor(arr.len() / 2)
+    left  = merge_sort(arr.slice(0, mid))
+    right = merge_sort(arr.slice(mid, arr.len()))
+    return merge(left, right)
+}
+
+fn merge(l, r) {
+    result = []
+    li = 0
+    ri = 0
+    while li < l.len() and ri < r.len() {
+        if l[li] <= r[ri] {
+            result.push(l[li]); li = li + 1
+        } else {
+            result.push(r[ri]); ri = ri + 1
+        }
+    }
+    while li < l.len() { result.push(l[li]); li = li + 1 }
+    while ri < r.len() { result.push(r[ri]); ri = ri + 1 }
+    return result
+}
+
+fn make_sorter(strategy) {
+    return {
+        sort: fn(data) { strategy(data) }
+    }
+}
+
+data = [64, 34, 25, 12, 22, 11, 90, 3, 77]
+print("Input : {data}")
+print("Bubble: {make_sorter(bubble_sort).sort(data)}")
+print("Merge : {make_sorter(merge_sort).sort(data)}")
+print("Native: {make_sorter(fn(a) { a.sort() }).sort(data)}")
+
+# ── Strategy: Pricing ────────────────────────────────────────────────────────
+
+fn regular_pricing(base) { return base }
+fn member_pricing(base)  { return (base * 0.9).round(2) }
+fn vip_pricing(base)     { return (base * 0.75).round(2) }
+fn flash_pricing(base)   { return (base * 0.5).round(2) }
+
+fn make_cart(pricing_strategy) {
+    items = []
+    add   = fn(name, price, qty) {
+        items.push({name: name, unit_price: price, qty: qty})
+    }
+    total = fn() {
+        return items.reduce(fn(acc, item) {
+            discounted = pricing_strategy(item.unit_price)
+            acc + discounted * item.qty
+        }, 0).round(2)
+    }
+    return {add: add, total: total, items: items}
+}
+
+print("\n── Pricing Strategies ─────────────────────")
+["regular", "member", "vip", "flash"].each(fn(tier) {
+    strategy = match tier {
+        "regular" => regular_pricing
+        "member"  => member_pricing
+        "vip"     => vip_pricing
+        "flash"   => flash_pricing
+    }
+    cart = make_cart(strategy)
+    cart.add("Widget",  29.99, 2)
+    cart.add("Gadget",  49.99, 1)
+    print("  {tier.pad_end(8)}: ${cart.total()}")
+})

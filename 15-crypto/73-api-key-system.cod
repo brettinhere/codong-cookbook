@@ -1,0 +1,91 @@
+# API Key Generation & Validation System
+# Issue, verify, rotate, and revoke API keys — stored in SQLite
+# codong run 73-api-key-system.cod
+
+db.connect("sqlite:///api_keys.db")
+db.query("CREATE TABLE IF NOT EXISTS api_keys (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    key_hash   TEXT UNIQUE,
+    prefix     TEXT,
+    name       TEXT,
+    user_id    INTEGER,
+    scopes     TEXT,
+    created_at TEXT,
+    last_used  TEXT,
+    revoked    INTEGER DEFAULT 0
+)", [])
+
+server = web.serve(port: 3030)
+
+fn generate_key() {
+    # Format: ck_live_<32 random hex chars>
+    raw    = crypto.random_hex(32)
+    key    = "ck_live_{raw}"
+    prefix = key.slice(0, 12)      # "ck_live_xxxx" — safe to display
+    hash   = crypto.sha256(key)    # store hash, never the raw key
+    return {key: key, prefix: prefix, hash: hash}
+}
+
+# Issue a new API key
+server.post("/keys", fn(req, res) {
+    body = req.json()
+    gen  = generate_key()
+    db.query("INSERT INTO api_keys (key_hash, prefix, name, user_id, scopes, created_at)
+              VALUES (?, ?, ?, ?, ?, ?)", [
+        gen.hash,
+        gen.prefix,
+        body.name   ?? "unnamed key",
+        body.user_id ?? 0,
+        json.encode(body.scopes ?? ["read"]),
+        time.now().format("YYYY-MM-DD HH:mm:ss"),
+    ])
+    # Return key ONCE — never retrievable again
+    res.status(201).json({
+        key    : gen.key,
+        prefix : gen.prefix,
+        note   : "Store this key securely. It will not be shown again.",
+    })
+})
+
+# Validate an API key (used in middleware)
+fn validate_key(raw_key) {
+    if raw_key == "" { return nil }
+    hash = crypto.sha256(raw_key)
+    rows = db.query("SELECT * FROM api_keys WHERE key_hash = ? AND revoked = 0", [hash])
+    if rows.len() == 0 { return nil }
+    db.query("UPDATE api_keys SET last_used = ? WHERE key_hash = ?",
+        [time.now().format("YYYY-MM-DD HH:mm:ss"), hash])
+    key = rows[0]
+    key.scopes = json.parse(key.scopes)
+    return key
+}
+
+# Protected route example
+server.get("/protected", fn(req, res) {
+    raw = req.header("X-API-Key") ?? req.query("api_key")
+    key = validate_key(raw)
+    if key == nil {
+        res.status(401).json({error: "invalid or missing API key"})
+        return
+    }
+    res.json({ok: true, key_name: key.name, scopes: key.scopes})
+})
+
+# List keys for a user (masked)
+server.get("/keys/:user_id", fn(req, res) {
+    rows = db.query("SELECT prefix, name, scopes, created_at, last_used, revoked
+                     FROM api_keys WHERE user_id = ? ORDER BY id DESC", [req.param("user_id")])
+    res.json({keys: rows})
+})
+
+# Revoke a key
+server.delete("/keys/:prefix", fn(req, res) {
+    db.query("UPDATE api_keys SET revoked = 1 WHERE prefix = ?", [req.param("prefix")])
+    res.json({ok: true, revoked: req.param("prefix")})
+})
+
+print("API Key server on http://localhost:3030")
+print("POST /keys           — issue new key")
+print("GET  /protected      — test key (X-API-Key header)")
+print("GET  /keys/:user_id  — list keys")
+print("DELETE /keys/:prefix — revoke key")

@@ -1,0 +1,58 @@
+# Environment Doctor CLI
+# Check that required environment variables and services are available
+# codong run 54-env-doctor-cli.cod
+
+checks = [
+    {name: "ANTHROPIC_API_KEY",      type: "env",  required: false},
+    {name: "OPENAI_API_KEY",         type: "env",  required: false},
+    {name: "DATABASE_URL",           type: "env",  required: false},
+    {name: "REDIS_URL",              type: "env",  required: false},
+    {name: "GITHUB_CLIENT_ID",       type: "env",  required: false},
+    {name: "PORT",                   type: "env",  required: false},
+    {name: "http://localhost:6379",  type: "ping", required: false, label: "Redis (localhost:6379)"},
+    {name: "http://localhost:5432",  type: "ping", required: false, label: "Postgres (localhost:5432)"},
+]
+
+pass = 0
+fail = 0
+warn = 0
+
+print("\n── Codong Environment Doctor ───────────────\n")
+
+checks.each(fn(c) {
+    label = c.label ?? c.name
+
+    if c.type == "env" {
+        val = env.get(c.name)
+        if val != "" {
+            masked = val.slice(0, 6) + "****"
+            print("  ✓  {label} = {masked}")
+            pass = pass + 1
+        } else if c.required {
+            print("  ✗  {label}  (MISSING — required)")
+            fail = fail + 1
+        } else {
+            print("  ○  {label}  (not set — optional)")
+            warn = warn + 1
+        }
+    }
+
+    if c.type == "ping" {
+        resp = http.get(c.name, timeout: 1000)
+        if !resp.is_err() {
+            print("  ✓  {label}  reachable")
+            pass = pass + 1
+        } else {
+            print("  ○  {label}  not reachable (optional)")
+            warn = warn + 1
+        }
+    }
+})
+
+print("\n────────────────────────────────────────────")
+print("  {pass} OK  |  {warn} optional  |  {fail} missing\n")
+
+if fail > 0 {
+    print("⚠  Set missing required variables before running dependent examples.")
+    env.exit(1)
+}

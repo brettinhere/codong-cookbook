@@ -1,0 +1,113 @@
+# Mock HTTP Server for Testing
+# Spin up a fake API server to test client code without real network calls
+# codong run 92-mock-http-server.cod
+
+# ── Mock Server ───────────────────────────────────────────────────────────────
+
+fn make_mock_server(port) {
+    server    = web.serve(port: port)
+    call_log  = []
+    routes    = {}
+
+    fn register(method, path, handler) {
+        key = "{method}:{path}"
+        routes[key] = handler
+    }
+
+    # Intercept all requests and log them
+    server.use(fn(req, res, next) {
+        call_log.push({
+            method : req.method,
+            path   : req.path,
+            body   : req.body,
+            ts     : time.now().format("HH:mm:ss.SSS"),
+        })
+        next()
+    })
+
+    get  = fn(path, response) { register("GET",    path, fn(req, res) { res.json(response) }) }
+    post = fn(path, handler)  { register("POST",   path, handler) }
+    del  = fn(path, response) { register("DELETE", path, fn(req, res) { res.json(response) }) }
+
+    calls_for = fn(method, path) {
+        return call_log.filter(fn(c) { c.method == method and c.path == path })
+    }
+
+    was_called = fn(method, path) {
+        return calls_for(method, path).len() > 0
+    }
+
+    call_count = fn(method, path) {
+        return calls_for(method, path).len()
+    }
+
+    reset = fn() {
+        call_log = []
+    }
+
+    return {get: get, post: post, del: del,
+            calls_for: calls_for, was_called: was_called,
+            call_count: call_count, reset: reset}
+}
+
+# ── Setup Mock ───────────────────────────────────────────────────────────────
+
+mock = make_mock_server(9999)
+
+# Register mock responses
+mock.get("/users", [{id: 1, name: "Alice"}, {id: 2, name: "Bob"}])
+mock.get("/users/1", {id: 1, name: "Alice", email: "alice@example.com"})
+mock.post("/users", fn(req, res) {
+    body = req.json()
+    res.status(201).json({id: 99, name: body.name, created: true})
+})
+mock.del("/users/1", {ok: true, deleted: 1})
+
+# ── Client Code Under Test ───────────────────────────────────────────────────
+
+fn user_client(base_url) {
+    list    = fn() { http.get("{base_url}/users").json }
+    get_one = fn(id) { http.get("{base_url}/users/{id}").json }
+    create  = fn(name, email) {
+        http.post("{base_url}/users", body: {name: name, email: email})
+    }
+    delete_user = fn(id) { http.delete("{base_url}/users/{id}").json }
+    return {list: list, get: get_one, create: create, delete: delete_user}
+}
+
+client = user_client("http://localhost:9999")
+
+# ── Run Tests ─────────────────────────────────────────────────────────────────
+
+pass = 0
+fail = 0
+
+fn check(label, condition) {
+    if condition {
+        print("  ✓ {label}")
+        pass = pass + 1
+    } else {
+        print("  ✗ {label}")
+        fail = fail + 1
+    }
+}
+
+print("\n── Running tests against mock server ───────\n")
+
+users = client.list()
+check("GET /users returns 2 users",          users.len() == 2)
+check("First user is Alice",                 users[0].name == "Alice")
+
+user = client.get(1)
+check("GET /users/1 returns Alice",          user.name == "Alice")
+check("Alice has email field",               user.email != "")
+
+created = client.create("Charlie", "charlie@example.com")
+check("POST /users returns 201-style body",  created.json.created == true)
+check("POST /users was called once",         mock.call_count("POST", "/users") == 1)
+
+deleted = client.delete_user(1)
+check("DELETE /users/1 returns ok",          deleted.ok == true)
+check("DELETE was called",                   mock.was_called("DELETE", "/users/1"))
+
+print("\n── {pass} passed, {fail} failed ───────────────")

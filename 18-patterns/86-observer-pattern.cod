@@ -1,0 +1,86 @@
+# Observer / EventEmitter Pattern
+# Decouple producers and consumers with typed events
+# codong run 86-observer-pattern.cod
+
+fn make_event_emitter() {
+    listeners = {}
+
+    on = fn(event, handler) {
+        if !listeners.has(event) { listeners[event] = [] }
+        listeners[event].push(handler)
+    }
+
+    once = fn(event, handler) {
+        wrapper = nil
+        wrapper = fn(...args) {
+            handler(...args)
+            off(event, wrapper)
+        }
+        on(event, wrapper)
+    }
+
+    off = fn(event, handler) {
+        if listeners.has(event) {
+            listeners[event] = listeners[event].filter(fn(h) { h != handler })
+        }
+    }
+
+    emit = fn(event, ...args) {
+        if listeners.has(event) {
+            listeners[event].each(fn(h) { h(...args) })
+        }
+        if listeners.has("*") {
+            listeners["*"].each(fn(h) { h(event, ...args) })
+        }
+    }
+
+    listener_count = fn(event) {
+        return (listeners[event] ?? []).len()
+    }
+
+    return {on: on, once: once, off: off, emit: emit, count: listener_count}
+}
+
+# ── Demo: Order lifecycle ────────────────────────────────────────────────────
+
+bus = make_event_emitter()
+
+# Logger: catches all events
+bus.on("*", fn(event, data) {
+    print("[LOG] {event} → {json.encode(data)}")
+})
+
+# Inventory service
+bus.on("order.created", fn(order) {
+    print("[INVENTORY] Reserve {order.quantity}x item #{order.product_id}")
+})
+
+# Email service
+bus.on("order.created", fn(order) {
+    print("[EMAIL] Send confirmation to {order.email}")
+})
+
+# Analytics (fires only once per session)
+bus.once("user.logged_in", fn(user) {
+    print("[ANALYTICS] First login of session: {user.name}")
+})
+
+# Payment service
+bus.on("order.paid", fn(order) {
+    print("[PAYMENT] Capture ${order.amount} for order #{order.id}")
+})
+
+# Fulfilment
+bus.on("order.paid", fn(order) {
+    print("[FULFIL] Queue shipment for order #{order.id}")
+})
+
+print("── Firing events ──────────────────────────\n")
+
+bus.emit("user.logged_in",  {name: "Alice", id: 1})
+bus.emit("user.logged_in",  {name: "Alice", id: 1})   # once() won't re-fire
+
+bus.emit("order.created", {id: 101, product_id: 42, quantity: 2, email: "alice@example.com"})
+bus.emit("order.paid",    {id: 101, amount: 49.99})
+
+print("\n[INFO] Listeners on 'order.created': {bus.count('order.created')}")

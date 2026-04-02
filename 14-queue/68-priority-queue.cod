@@ -1,0 +1,54 @@
+# Priority Queue with Redis Sorted Sets
+# High-priority jobs are processed before low-priority ones
+# codong run 68-priority-queue.cod
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+PQUEUE = "pqueue:jobs"
+
+fn enqueue_priority(job_type, payload, priority) {
+    # Lower score = higher priority (0=critical, 10=low)
+    job = json.encode({
+        id       : str(time.unix()) + "-" + str(math.floor(math.random() * 999)),
+        type     : job_type,
+        payload  : payload,
+        priority : priority,
+        enqueued : time.now().format("HH:mm:ss"),
+    })
+    redis.zadd(PQUEUE, job, priority)
+    print("  Enqueued [{priority}] {job_type}")
+}
+
+fn dequeue_next() {
+    # Get lowest score (highest priority) job
+    items = redis.zrange(PQUEUE, 0, 0, with_scores: true)
+    if items.len() == 0 { return nil }
+
+    raw = items[0].value
+    redis.zrem(PQUEUE, raw)
+    return json.parse(raw)
+}
+
+fn process(job) {
+    time.sleep(50)
+    print("  PROCESS [{job.priority}] {job.type} — {json.encode(job.payload)}")
+}
+
+# Seed some jobs with mixed priorities
+print("Enqueuing mixed-priority jobs ...\n")
+enqueue_priority("payment",        {amount: 500},   0)   # critical
+enqueue_priority("send_invoice",   {user: 42},      5)   # normal
+enqueue_priority("weekly_report",  {week: 12},      9)   # low
+enqueue_priority("fraud_alert",    {tx_id: "x99"},  0)   # critical
+enqueue_priority("cleanup_logs",   {},               10)  # background
+enqueue_priority("send_email",     {to: "a@b.com"}, 5)   # normal
+enqueue_priority("charge_renewal", {sub_id: 7},     1)   # high
+
+print("\nProcessing in priority order ...\n")
+while true {
+    job = dequeue_next()
+    if job == nil { break }
+    process(job)
+}
+
+print("\nQueue empty.")

@@ -1,0 +1,123 @@
+# Property-Based Testing
+# Generate random inputs and verify invariants hold — like Hypothesis or QuickCheck
+# codong run 93-property-testing.cod
+
+# ── Property Test Engine ─────────────────────────────────────────────────────
+
+fn property(name, generator, predicate, count) {
+    count    = count ?? 100
+    failures = []
+
+    i = 0
+    while i < count {
+        input   = generator()
+        ok      = try(fn() { predicate(input) })
+        if ok.is_err() or !ok.value() {
+            failures.push({input: input, error: ok.is_err() ? ok.error() : "predicate returned false"})
+            if failures.len() >= 3 { break }   # stop after 3 counterexamples
+        }
+        i = i + 1
+    }
+
+    if failures.len() == 0 {
+        print("  ✓ {name}  ({count} cases)")
+    } else {
+        print("  ✗ {name}")
+        failures.each(fn(f) {
+            print("     Counterexample: {json.encode(f.input)}")
+            print("     Error: {f.error}")
+        })
+    }
+}
+
+# ── Generators ───────────────────────────────────────────────────────────────
+
+fn gen_int(min, max) {
+    return fn() { math.floor(math.random() * (max - min + 1)) + min }
+}
+
+fn gen_string(max_len) {
+    chars = "abcdefghijklmnopqrstuvwxyz"
+    return fn() {
+        n   = math.floor(math.random() * max_len) + 1
+        out = ""
+        i   = 0
+        while i < n {
+            out = out + chars[math.floor(math.random() * chars.len())]
+            i   = i + 1
+        }
+        return out
+    }
+}
+
+fn gen_list(element_gen, max_len) {
+    return fn() {
+        n   = math.floor(math.random() * max_len) + 1
+        out = []
+        i   = 0
+        while i < n { out.push(element_gen()); i = i + 1 }
+        return out
+    }
+}
+
+fn gen_pair(gen_a, gen_b) {
+    return fn() { [gen_a(), gen_b()] }
+}
+
+# ── Functions Under Test ──────────────────────────────────────────────────────
+
+fn my_sort(arr) { return arr.sort() }
+fn my_reverse(s) { return s.reverse() }
+fn my_abs(n)     { return n < 0 ? -n : n }
+
+# ── Property Tests ────────────────────────────────────────────────────────────
+
+print("\n── Integer Properties ──────────────────────\n")
+
+property("abs(x) >= 0 for all x",
+    gen_int(-1000, 1000),
+    fn(x) { my_abs(x) >= 0 })
+
+property("abs(abs(x)) == abs(x)",
+    gen_int(-1000, 1000),
+    fn(x) { my_abs(my_abs(x)) == my_abs(x) })
+
+property("x + 0 == x (additive identity)",
+    gen_int(-10000, 10000),
+    fn(x) { x + 0 == x })
+
+property("x * 1 == x (multiplicative identity)",
+    gen_int(-10000, 10000),
+    fn(x) { x * 1 == x })
+
+property("a + b == b + a (commutative)",
+    gen_pair(gen_int(-100, 100), gen_int(-100, 100)),
+    fn(pair) { pair[0] + pair[1] == pair[1] + pair[0] })
+
+print("\n── String Properties ───────────────────────\n")
+
+property("reverse(reverse(s)) == s",
+    gen_string(20),
+    fn(s) { my_reverse(my_reverse(s)) == s })
+
+property("len(s) >= 1",
+    gen_string(50),
+    fn(s) { s.len() >= 1 })
+
+print("\n── List Properties ─────────────────────────\n")
+
+property("sorted list is non-decreasing",
+    gen_list(gen_int(-100, 100), 20),
+    fn(arr) {
+        sorted = my_sort(arr)
+        i = 0
+        while i < sorted.len() - 1 {
+            if sorted[i] > sorted[i+1] { return false }
+            i = i + 1
+        }
+        return true
+    })
+
+property("sort preserves length",
+    gen_list(gen_int(0, 100), 30),
+    fn(arr) { my_sort(arr).len() == arr.len() })

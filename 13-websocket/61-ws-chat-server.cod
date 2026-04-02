@@ -1,0 +1,62 @@
+# WebSocket Chat Server
+# Real-time group chat — multiple clients, broadcast messages
+# codong run 61-ws-chat-server.cod
+# Test: wscat -c ws://localhost:4000/chat
+
+server = web.serve(port: 4000)
+rooms  = {}   # room_id -> list of connection ids
+
+# HTTP endpoint to get active rooms
+server.get("/rooms", fn(req, res) {
+    room_list = rooms.keys().map(fn(id) {
+        {id: id, members: rooms[id].len()}
+    })
+    res.json({rooms: room_list})
+})
+
+# WebSocket upgrade
+server.ws("/chat/:room", fn(ws) {
+    room = ws.param("room")
+    id   = ws.id()
+
+    # Join room
+    if !rooms.has(room) { rooms[room] = [] }
+    rooms[room].push(id)
+
+    ts   = time.now().format("HH:mm:ss")
+    name = "User#{id.slice(0, 4)}"
+
+    ws.broadcast(room, json.encode({
+        type: "join",
+        user: name,
+        text: "{name} joined #{room}",
+        ts:   ts,
+    }))
+
+    print("[{ts}] {name} joined #{room} ({rooms[room].len()} members)")
+
+    ws.on("message", fn(msg) {
+        data = json.parse(msg)
+        ts2  = time.now().format("HH:mm:ss")
+        ws.broadcast(room, json.encode({
+            type: "message",
+            user: name,
+            text: data.text ?? msg,
+            ts:   ts2,
+        }))
+    })
+
+    ws.on("close", fn() {
+        ts3 = time.now().format("HH:mm:ss")
+        rooms[room] = rooms[room].filter(fn(cid) { cid != id })
+        ws.broadcast(room, json.encode({
+            type: "leave",
+            user: name,
+            text: "{name} left #{room}",
+            ts:   ts3,
+        }))
+        print("[{ts3}] {name} left #{room}")
+    })
+})
+
+print("WebSocket chat server on ws://localhost:4000/chat/:room")

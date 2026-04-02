@@ -1,0 +1,110 @@
+# Snapshot Testing
+# Capture output snapshots on first run; compare on subsequent runs (like Jest snapshots)
+# codong run 95-snapshot-testing.cod          — run tests
+# codong run 95-snapshot-testing.cod -- update — refresh all snapshots
+
+SNAPSHOT_DIR = "./__snapshots__"
+fs.mkdir(SNAPSHOT_DIR)
+
+update_mode  = env.args().contains("update")
+pass_count   = 0
+fail_count   = 0
+new_count    = 0
+
+fn snapshot(name, value) {
+    file    = "{SNAPSHOT_DIR}/{name}.snap"
+    current = json.pretty(value)
+
+    if !fs.exists(file) or update_mode {
+        fs.write(file, current)
+        if update_mode {
+            print("  ↺ Updated: {name}")
+        } else {
+            print("  ● New snapshot: {name}")
+            new_count = new_count + 1
+        }
+        return
+    }
+
+    saved = fs.read(file)
+    if current == saved {
+        print("  ✓ {name}")
+        pass_count = pass_count + 1
+    } else {
+        print("  ✗ {name}")
+        print("    Expected:")
+        saved.split("\n").slice(0, 5).each(fn(l) { print("      - {l}") })
+        print("    Received:")
+        current.split("\n").slice(0, 5).each(fn(l) { print("      + {l}") })
+        fail_count = fail_count + 1
+    }
+}
+
+# ── Functions that produce output ─────────────────────────────────────────────
+
+fn format_user(user) {
+    return {
+        id       : user.id,
+        display  : "{user.first} {user.last}",
+        initials : user.first.slice(0,1) + user.last.slice(0,1),
+        role     : user.role.upper(),
+    }
+}
+
+fn generate_invoice(order) {
+    subtotal = order.items.reduce(fn(acc, i) { acc + i.price * i.qty }, 0)
+    tax      = (subtotal * 0.08).round(2)
+    return {
+        invoice_no : "INV-{order.id}",
+        items      : order.items,
+        subtotal   : subtotal,
+        tax        : tax,
+        total      : (subtotal + tax).round(2),
+    }
+}
+
+fn transform_api_response(data) {
+    return data.map(fn(item) {
+        {
+            key   : item.id,
+            label : item.name.upper(),
+            meta  : {type: item.category, active: item.status == "active"},
+        }
+    })
+}
+
+# ── Snapshots ─────────────────────────────────────────────────────────────────
+print("\n── Snapshot Tests ──────────────────────────\n")
+
+snapshot("format-user-admin",
+    format_user({id: 1, first: "Alice", last: "Smith", role: "admin"}))
+
+snapshot("format-user-viewer",
+    format_user({id: 2, first: "Bob", last: "Jones", role: "viewer"}))
+
+snapshot("invoice-order-42",
+    generate_invoice({
+        id: 42,
+        items: [
+            {name: "Widget", price: 9.99,  qty: 3},
+            {name: "Gadget", price: 24.99, qty: 1},
+        ]
+    }))
+
+snapshot("api-response-transform",
+    transform_api_response([
+        {id: "a1", name: "Product One",   category: "electronics", status: "active"},
+        {id: "b2", name: "Product Two",   category: "clothing",    status: "inactive"},
+        {id: "c3", name: "Product Three", category: "food",        status: "active"},
+    ]))
+
+print("\n────────────────────────────────────────────")
+if update_mode {
+    print("Snapshots updated.")
+} else {
+    print("{pass_count} passed  |  {fail_count} failed  |  {new_count} new")
+    if fail_count > 0 {
+        print("Run with -- update to refresh snapshots.")
+        env.exit(1)
+    }
+}

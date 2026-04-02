@@ -1,0 +1,118 @@
+# Email Template Engine
+# Manage reusable HTML email templates with variable substitution
+# codong run 97-email-template-engine.cod
+
+# ── Simple Template Engine ────────────────────────────────────────────────────
+
+fn render_template(template, vars) {
+    result = template
+    vars.each(fn(key, value) {
+        result = result.replace("{{" + key + "}}", str(value))
+    })
+    return result
+}
+
+# ── HTML Email Templates ───────────────────────────────────────────────────────
+
+TEMPLATES = {
+
+    welcome: "
+<!DOCTYPE html>
+<html>
+<body style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
+  <div style='background: #4f46e5; padding: 24px; text-align: center;'>
+    <h1 style='color: white; margin: 0;'>Welcome to {{app_name}}!</h1>
+  </div>
+  <div style='padding: 32px;'>
+    <p>Hi {{name}},</p>
+    <p>Your account is ready. You're on the <strong>{{plan}}</strong> plan.</p>
+    <a href='{{cta_url}}' style='background:#4f46e5;color:white;padding:12px 24px;
+       text-decoration:none;border-radius:6px;display:inline-block;'>
+      Get Started
+    </a>
+  </div>
+  <div style='padding: 16px; color: #888; font-size: 12px; text-align: center;'>
+    © {{year}} {{app_name}}. All rights reserved.
+  </div>
+</body>
+</html>
+",
+
+    password_reset: "
+<div style='font-family: Arial; max-width: 600px; margin: 0 auto;'>
+  <h2>Password Reset Request</h2>
+  <p>Hi {{name}}, we received a request to reset your password.</p>
+  <p>Click the button below within the next <strong>{{expires_in}}</strong>:</p>
+  <a href='{{reset_url}}' style='background:#dc2626;color:white;padding:12px 24px;
+     text-decoration:none;border-radius:6px;display:inline-block;'>
+    Reset Password
+  </a>
+  <p style='color:#888;font-size:12px;margin-top:24px;'>
+    If you didn't request this, you can safely ignore this email.
+  </p>
+</div>
+",
+
+    invoice: "
+<div style='font-family: Arial; max-width: 600px; margin: 0 auto;'>
+  <h2>Invoice #{{invoice_no}}</h2>
+  <p>Hi {{name}}, thank you for your purchase!</p>
+  <table style='width:100%;border-collapse:collapse;'>
+    <tr style='background:#f3f4f6;'>
+      <th style='padding:8px;text-align:left;'>Item</th>
+      <th style='padding:8px;text-align:right;'>Amount</th>
+    </tr>
+    {{items_rows}}
+    <tr style='border-top:2px solid #e5e7eb;font-weight:bold;'>
+      <td style='padding:8px;'>Total</td>
+      <td style='padding:8px;text-align:right;'>{{total}}</td>
+    </tr>
+  </table>
+  <p style='color:#888;font-size:12px;'>
+    Payment processed on {{date}}. Receipt ID: {{receipt_id}}
+  </p>
+</div>
+",
+
+}
+
+# ── Render Examples ───────────────────────────────────────────────────────────
+
+welcome_html = render_template(TEMPLATES.welcome, {
+    app_name : "Codong",
+    name     : "Alice",
+    plan     : "Pro",
+    cta_url  : "https://app.codong.org/dashboard",
+    year     : time.now().format("YYYY"),
+})
+
+reset_html = render_template(TEMPLATES.password_reset, {
+    name       : "Bob",
+    expires_in : "1 hour",
+    reset_url  : "https://app.codong.org/reset?token=abc123",
+})
+
+# Build invoice rows dynamically
+items = [{name: "Pro Plan (annual)", amount: "$119.00"}, {name: "Add-on: Extra seats", amount: "$29.00"}]
+rows  = items.map(fn(i) {
+    "<tr><td style='padding:8px;'>{i.name}</td><td style='padding:8px;text-align:right;'>{i.amount}</td></tr>"
+}).join("\n")
+
+invoice_html = render_template(TEMPLATES.invoice, {
+    invoice_no : "INV-2026-0042",
+    name       : "Charlie",
+    items_rows : rows,
+    total      : "$148.00",
+    date       : time.now().format("YYYY-MM-DD"),
+    receipt_id : "rcpt_" + crypto.random_hex(8),
+})
+
+# Save to files (for preview)
+fs.write("email-welcome.html",  welcome_html)
+fs.write("email-reset.html",    reset_html)
+fs.write("email-invoice.html",  invoice_html)
+
+print("Templates rendered:")
+print("  ✓ email-welcome.html  ({welcome_html.len()} bytes)")
+print("  ✓ email-reset.html    ({reset_html.len()} bytes)")
+print("  ✓ email-invoice.html  ({invoice_html.len()} bytes)")

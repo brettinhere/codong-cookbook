@@ -1,0 +1,69 @@
+# AES-256-GCM Encryption & Decryption
+# Encrypt sensitive data at rest (config values, PII, tokens)
+# codong run 72-aes-encrypt-decrypt.cod
+
+SECRET_KEY = env.get("ENCRYPTION_KEY") ?? "dev-key-32-bytes-do-not-use-prod"
+
+fn demo_basic() {
+    plaintext = "sensitive data: SSN=123-45-6789, card=4111111111111111"
+
+    encrypted = crypto.aes_encrypt(plaintext, SECRET_KEY)
+    print("Plaintext  : {plaintext}")
+    print("Encrypted  : {encrypted}")
+    print("Length     : {encrypted.len()} chars\n")
+
+    decrypted = crypto.aes_decrypt(encrypted, SECRET_KEY)
+    print("Decrypted  : {decrypted}")
+    print("Match      : {plaintext == decrypted}\n")
+
+    # Wrong key fails
+    bad = crypto.aes_decrypt(encrypted, "wrong-key-32-bytes-padding-here!")
+    print("Wrong key  : {bad.is_err() ? 'decryption failed ✓' : bad}")
+}
+
+fn demo_field_encryption() {
+    # Encrypt specific DB fields before storage
+    users = [
+        {name: "Alice",  email: "alice@example.com", ssn: "111-22-3333"},
+        {name: "Bob",    email: "bob@example.com",   ssn: "444-55-6666"},
+    ]
+
+    print("── Field-level Encryption ─────────────")
+    encrypted_users = users.map(fn(u) {
+        {
+            name           : u.name,
+            email          : u.email,
+            ssn_encrypted  : crypto.aes_encrypt(u.ssn, SECRET_KEY),
+        }
+    })
+
+    encrypted_users.each(fn(u) {
+        decrypted_ssn = crypto.aes_decrypt(u.ssn_encrypted, SECRET_KEY)
+        print("  {u.name}: SSN={decrypted_ssn} (stored as {u.ssn_encrypted.slice(0,20)}...)")
+    })
+}
+
+fn demo_envelope_encryption() {
+    # Envelope encryption: encrypt the data key with a master key
+    print("\n── Envelope Encryption ────────────────")
+    data_key    = crypto.random_bytes(32)
+    master_key  = SECRET_KEY
+    payload     = "top secret document contents"
+
+    # Encrypt data with data key
+    ciphertext  = crypto.aes_encrypt(payload, data_key)
+    # Encrypt data key with master key
+    enc_data_key = crypto.aes_encrypt(data_key, master_key)
+
+    print("Encrypted data key: {enc_data_key.slice(0,30)}...")
+    print("Ciphertext        : {ciphertext.slice(0,30)}...")
+
+    # Decrypt: first recover data key, then decrypt payload
+    recovered_key = crypto.aes_decrypt(enc_data_key, master_key)
+    recovered     = crypto.aes_decrypt(ciphertext, recovered_key)
+    print("Recovered         : {recovered}")
+}
+
+demo_basic()
+demo_field_encryption()
+demo_envelope_encryption()

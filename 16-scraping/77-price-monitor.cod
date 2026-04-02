@@ -1,0 +1,86 @@
+# Product Price Monitor
+# Track prices on multiple pages; alert when price drops below threshold
+# codong run 77-price-monitor.cod
+
+db.connect("sqlite:///prices.db")
+db.query("CREATE TABLE IF NOT EXISTS price_history (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    product   TEXT,
+    url       TEXT,
+    price     REAL,
+    currency  TEXT DEFAULT 'USD',
+    checked_at TEXT
+)", [])
+
+PRODUCTS = [
+    {name: "Mechanical Keyboard", url: "https://example.com/keyboard",  selector: ".price",  alert_below: 80.0},
+    {name: "Wireless Mouse",      url: "https://example.com/mouse",     selector: ".amount", alert_below: 35.0},
+    {name: "USB-C Hub",           url: "https://example.com/hub",       selector: "#price",  alert_below: 25.0},
+]
+
+ALERT_WEBHOOK = env.get("SLACK_WEBHOOK_URL") ?? ""
+
+fn extract_price(html, selector) {
+    # Extract price text from HTML using CSS selector
+    text = html.css(selector).first().text()
+    # Strip currency symbol and parse
+    cleaned = text.replace("$", "").replace(",", "").trim()
+    return float(cleaned)
+}
+
+fn check_product(product) {
+    resp = http.get(product.url, timeout: 15000, headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; PriceBot/1.0)"
+    })
+
+    if resp.is_err() {
+        print("  ✗ {product.name}: fetch failed")
+        return nil
+    }
+
+    price = extract_price(resp.body, product.selector)
+    if price.is_err() {
+        print("  ✗ {product.name}: price extraction failed")
+        return nil
+    }
+
+    ts = time.now().format("YYYY-MM-DD HH:mm:ss")
+    db.query("INSERT INTO price_history (product, url, price, checked_at) VALUES (?, ?, ?, ?)",
+        [product.name, product.url, price, ts])
+
+    return price
+}
+
+fn get_previous_price(product_name) {
+    rows = db.query("SELECT price FROM price_history WHERE product = ?
+                     ORDER BY id DESC LIMIT 1 OFFSET 1", [product_name])
+    if rows.len() > 0 { return rows[0].price }
+    return nil
+}
+
+print("Checking prices ...\n")
+alerts = []
+
+PRODUCTS.each(fn(p) {
+    price = check_product(p)
+    if price == nil { return }
+
+    prev  = get_previous_price(p.name)
+    delta = prev != nil ? (price - prev).round(2) : 0
+    arrow = delta < 0 ? "↓" : (delta > 0 ? "↑" : "→")
+
+    print("  {p.name}: ${price}  {arrow} {delta != 0 ? str(delta) : ''}")
+
+    if price < p.alert_below {
+        alerts.push("🔔 *{p.name}* dropped to *${price}* (threshold: ${p.alert_below})\n{p.url}")
+    }
+})
+
+if alerts.len() > 0 and ALERT_WEBHOOK != "" {
+    text = "Price Alerts!\n" + alerts.join("\n\n")
+    http.post(ALERT_WEBHOOK, body: {text: text})
+    print("\n{alerts.len()} alert(s) sent to Slack!")
+} else if alerts.len() > 0 {
+    print("\n── Price Alerts ──────────────")
+    alerts.each(fn(a) { print(a) })
+}

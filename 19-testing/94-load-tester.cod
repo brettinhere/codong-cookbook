@@ -1,0 +1,76 @@
+# HTTP Load Tester
+# Bombard an endpoint with concurrent requests and report p50/p95/p99 latencies
+# codong run 94-load-tester.cod -- http://localhost:3000/health
+# codong run 94-load-tester.cod -- http://localhost:3000/api/users --rps 50 --duration 10
+
+args     = env.args()
+url      = args[0] ?? "http://localhost:3000"
+rps      = int(args[2] ?? "20")        # requests per second
+duration = int(args[4] ?? "5")         # seconds
+method   = args[6] ?? "GET"
+
+print("\n── Codong Load Tester ───────────────────────")
+print("  Target   : {url}")
+print("  RPS      : {rps}")
+print("  Duration : {duration}s")
+print("  Method   : {method}")
+print("────────────────────────────────────────────\n")
+
+results     = []
+start_ts    = time.unix_ms()
+end_ts      = start_ts + duration * 1000
+req_count   = 0
+error_count = 0
+
+# Batch requests per second
+while time.unix_ms() < end_ts {
+    batch_start = time.unix_ms()
+
+    batch_results = concurrent.map(
+        list.range(rps),
+        rps,
+        fn(_) {
+            t0   = time.unix_ms()
+            resp = http.get(url, timeout: 5000)
+            ms   = time.unix_ms() - t0
+            return {
+                ms     : ms,
+                status : resp.is_err() ? 0 : resp.status,
+                ok     : !resp.is_err() and resp.status < 400,
+            }
+        }
+    )
+
+    batch_results.each(fn(r) {
+        results.push(r.ms)
+        req_count = req_count + 1
+        if !r.ok { error_count = error_count + 1 }
+    })
+
+    elapsed_batch = time.unix_ms() - batch_start
+    wait          = 1000 - elapsed_batch
+    if wait > 0 { time.sleep(wait) }
+
+    done_pct = ((time.unix_ms() - start_ts) / (duration * 1000) * 100).round(0)
+    print("  {done_pct}%  req={req_count}  err={error_count}  last_batch={elapsed_batch}ms")
+}
+
+# Compute percentiles
+sorted_ms = results.sort()
+fn pct(p) {
+    idx = math.floor(p / 100.0 * sorted_ms.len()).min(sorted_ms.len() - 1)
+    return sorted_ms[idx]
+}
+
+total_sec = (time.unix_ms() - start_ts) / 1000.0
+actual_rps = (req_count / total_sec).round(1)
+
+print("\n── Results ─────────────────────────────────")
+print("  Requests     : {req_count}")
+print("  Errors       : {error_count} ({(error_count / req_count * 100).round(1)}%)")
+print("  Actual RPS   : {actual_rps}")
+print("  Min latency  : {sorted_ms[0]}ms")
+print("  p50 latency  : {pct(50)}ms")
+print("  p95 latency  : {pct(95)}ms")
+print("  p99 latency  : {pct(99)}ms")
+print("  Max latency  : {sorted_ms[sorted_ms.len()-1]}ms")

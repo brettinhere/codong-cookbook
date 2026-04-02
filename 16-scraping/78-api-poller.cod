@@ -1,0 +1,102 @@
+# API Poller — Detect Changes Between Polls
+# Poll a public API on a schedule, store deltas, webhook on change
+# codong run 78-api-poller.cod
+
+db.connect("sqlite:///poller.db")
+db.query("CREATE TABLE IF NOT EXISTS poll_snapshots (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT,
+    data_hash  TEXT,
+    data       TEXT,
+    polled_at  TEXT
+)", [])
+
+db.query("CREATE TABLE IF NOT EXISTS poll_changes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT,
+    field      TEXT,
+    old_value  TEXT,
+    new_value  TEXT,
+    detected_at TEXT
+)", [])
+
+SOURCES = [
+    {
+        name : "GitHub Stars — codong",
+        url  : "https://api.github.com/repos/brettinhere/codong-cookbook",
+        watch: ["stargazers_count", "forks_count", "open_issues_count"],
+    },
+    {
+        name : "Open Exchange Rate — USD/CNY",
+        url  : "https://open.er-api.com/v6/latest/USD",
+        watch: ["rates.CNY", "rates.EUR", "rates.JPY"],
+    },
+]
+
+fn deep_get(obj, path) {
+    parts = path.split(".")
+    val   = obj
+    parts.each(fn(p) {
+        if val != nil and val.type() == "map" {
+            val = val[p] ?? nil
+        } else {
+            val = nil
+        }
+    })
+    return val
+}
+
+fn poll_source(source) {
+    resp = http.get(source.url, timeout: 10000, headers: {
+        "User-Agent"   : "Codong-Poller/1.0",
+        "Accept"       : "application/json",
+    })
+    if resp.is_err() { return }
+
+    data     = resp.json
+    data_str = json.encode(data)
+    new_hash = crypto.sha256(data_str)
+    ts       = time.now().format("YYYY-MM-DD HH:mm:ss")
+
+    # Get last snapshot
+    prev = db.query("SELECT data_hash, data FROM poll_snapshots
+                     WHERE source = ? ORDER BY id DESC LIMIT 1", [source.name])
+
+    if prev.len() > 0 and prev[0].data_hash == new_hash {
+        print("  {source.name}: no change")
+        return
+    }
+
+    # Save new snapshot
+    db.query("INSERT INTO poll_snapshots (source, data_hash, data, polled_at) VALUES (?, ?, ?, ?)",
+        [source.name, new_hash, data_str, ts])
+
+    if prev.len() == 0 {
+        print("  {source.name}: first snapshot saved")
+        return
+    }
+
+    # Detect field-level changes
+    old_data = json.parse(prev[0].data)
+    changes  = []
+    source.watch.each(fn(field) {
+        old_val = str(deep_get(old_data, field) ?? "nil")
+        new_val = str(deep_get(data, field) ?? "nil")
+        if old_val != new_val {
+            changes.push({field: field, old: old_val, new: new_val})
+            db.query("INSERT INTO poll_changes (source, field, old_value, new_value, detected_at)
+                      VALUES (?, ?, ?, ?, ?)", [source.name, field, old_val, new_val, ts])
+        }
+    })
+
+    if changes.len() > 0 {
+        print("  {source.name}: {changes.len()} change(s) detected!")
+        changes.each(fn(c) {
+            print("    {c.field}: {c.old} → {c.new}")
+        })
+    }
+}
+
+print("[{time.now().format('HH:mm:ss')}] Polling {SOURCES.len()} sources ...\n")
+SOURCES.each(fn(s) { poll_source(s) })
+print("\nDone.")

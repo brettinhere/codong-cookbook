@@ -1,0 +1,41 @@
+# Concurrent Worker Pool
+# Fan-out tasks to N workers running in parallel goroutines
+# codong run 67-worker-pool.cod
+
+WORKER_COUNT = 5
+TASK_COUNT   = 20
+
+fn do_work(task) {
+    # Simulate variable-length work
+    ms = 100 + math.floor(math.random() * 400)
+    time.sleep(ms)
+    return {task_id: task.id, result: task.value * 2, ms: ms}
+}
+
+# Build task list
+tasks = []
+i = 0
+while i < TASK_COUNT {
+    tasks.push({id: i + 1, value: (i + 1) * 10})
+    i = i + 1
+}
+
+print("Processing {TASK_COUNT} tasks with {WORKER_COUNT} workers ...\n")
+
+start   = time.unix()
+results = concurrent.map(tasks, WORKER_COUNT, fn(task) {
+    r  = do_work(task)
+    ts = time.now().format("HH:mm:ss.SSS")
+    print("  [W] task#{r.task_id} → result={r.result}  ({r.ms}ms)")
+    return r
+})
+elapsed = ((time.unix() - start) * 1000).round(0)
+
+total_result = results.reduce(fn(acc, r) { acc + r.result }, 0)
+
+print("\n── Summary ─────────────────────────────")
+print("  Workers       : {WORKER_COUNT}")
+print("  Tasks done    : {results.len()}")
+print("  Total elapsed : {elapsed}ms")
+print("  Sum of results: {total_result}")
+print("  Avg task time : {(elapsed / TASK_COUNT).round(0)}ms")

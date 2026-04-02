@@ -1,0 +1,64 @@
+# Universal Unit Converter
+# Temperature, distance, weight, volume, data size, speed
+# codong run 85-unit-converter.cod
+
+CONVERSIONS = {
+    # Temperature (to Celsius as base)
+    temperature: {
+        celsius   : {to_base: fn(v) { v },           from_base: fn(v) { v }},
+        fahrenheit: {to_base: fn(v) { (v-32)*5/9 },  from_base: fn(v) { v*9/5+32 }},
+        kelvin    : {to_base: fn(v) { v - 273.15 },  from_base: fn(v) { v + 273.15 }},
+    },
+    # Distance (to meters as base)
+    distance: {
+        meters     : {to_base: fn(v) { v },          from_base: fn(v) { v }},
+        kilometers : {to_base: fn(v) { v * 1000 },   from_base: fn(v) { v / 1000 }},
+        miles      : {to_base: fn(v) { v * 1609.34}, from_base: fn(v) { v / 1609.34 }},
+        feet       : {to_base: fn(v) { v * 0.3048 }, from_base: fn(v) { v / 0.3048 }},
+        inches     : {to_base: fn(v) { v * 0.0254 }, from_base: fn(v) { v / 0.0254 }},
+        nautical_mi: {to_base: fn(v) { v * 1852 },   from_base: fn(v) { v / 1852 }},
+    },
+    # Weight (to grams as base)
+    weight: {
+        grams     : {to_base: fn(v) { v },           from_base: fn(v) { v }},
+        kilograms : {to_base: fn(v) { v * 1000 },    from_base: fn(v) { v / 1000 }},
+        pounds    : {to_base: fn(v) { v * 453.592 }, from_base: fn(v) { v / 453.592 }},
+        ounces    : {to_base: fn(v) { v * 28.3495 }, from_base: fn(v) { v / 28.3495 }},
+        tonnes    : {to_base: fn(v) { v * 1e6 },     from_base: fn(v) { v / 1e6 }},
+    },
+    # Data size (to bytes as base)
+    data: {
+        bytes    : {to_base: fn(v) { v },            from_base: fn(v) { v }},
+        kilobytes: {to_base: fn(v) { v * 1024 },     from_base: fn(v) { v / 1024 }},
+        megabytes: {to_base: fn(v) { v * 1024**2 },  from_base: fn(v) { v / 1024**2 }},
+        gigabytes: {to_base: fn(v) { v * 1024**3 },  from_base: fn(v) { v / 1024**3 }},
+        terabytes: {to_base: fn(v) { v * 1024**4 },  from_base: fn(v) { v / 1024**4 }},
+    },
+}
+
+fn convert(category, from_unit, to_unit, value) {
+    cat   = CONVERSIONS[category]
+    if cat == nil { error("unknown category: {category}") }
+    from  = cat[from_unit]
+    to    = cat[to_unit]
+    if from == nil { error("unknown unit: {from_unit}") }
+    if to   == nil { error("unknown unit: {to_unit}") }
+    base  = from.to_base(value)
+    return to.from_base(base)
+}
+
+fn demo(category, from, to, values) {
+    print("── {category} ─────────────────────────────")
+    values.each(fn(v) {
+        result = convert(category, from, to, v).round(4)
+        print("  {v} {from} = {result} {to}")
+    })
+    print("")
+}
+
+demo("temperature", "celsius",   "fahrenheit", [0, 20, 37, 100])
+demo("temperature", "fahrenheit","celsius",     [32, 72, 98.6, 212])
+demo("distance",    "miles",     "kilometers",  [1, 5, 26.2, 100])
+demo("distance",    "meters",    "feet",        [1, 100, 1000])
+demo("weight",      "kilograms", "pounds",      [1, 5, 70, 100])
+demo("data",        "gigabytes", "megabytes",   [1, 16, 512, 2048])

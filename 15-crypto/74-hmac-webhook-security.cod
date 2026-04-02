@@ -1,0 +1,93 @@
+# HMAC Webhook Signature Security
+# Sign outgoing webhooks; verify incoming webhook signatures (like GitHub/Stripe)
+# codong run 74-hmac-webhook-security.cod
+
+WEBHOOK_SECRET = env.get("WEBHOOK_SECRET") ?? "super-secret-webhook-key"
+
+server = web.serve(port: 3031)
+
+# ─── Sending side: sign your outgoing webhooks ───────────────────────────────
+
+fn sign_payload(body_str) {
+    sig = crypto.hmac_sha256(body_str, WEBHOOK_SECRET)
+    return "sha256={sig}"
+}
+
+server.post("/dispatch", fn(req, res) {
+    body = req.json()
+    event = {
+        id      : crypto.random_hex(8),
+        type    : body.event ?? "user.created",
+        payload : body.payload ?? {},
+        ts      : time.now().format("YYYY-MM-DD HH:mm:ss"),
+    }
+    body_str  = json.encode(event)
+    signature = sign_payload(body_str)
+
+    # Deliver to webhook endpoint
+    delivery = http.post(body.url ?? "http://localhost:3031/receive",
+        body: event,
+        headers: {
+            "X-Webhook-Signature" : signature,
+            "X-Webhook-ID"        : event.id,
+        })
+
+    res.json({
+        ok        : true,
+        event_id  : event.id,
+        signature : signature,
+        status    : delivery.status,
+    })
+})
+
+# ─── Receiving side: verify incoming webhook signatures ──────────────────────
+
+fn verify_signature(body_str, header_sig) {
+    expected = "sha256={crypto.hmac_sha256(body_str, WEBHOOK_SECRET)}"
+    # Constant-time comparison to prevent timing attacks
+    return crypto.constant_eq(header_sig, expected)
+}
+
+server.post("/receive", fn(req, res) {
+    body_str = req.raw_body()
+    sig      = req.header("X-Webhook-Signature") ?? ""
+
+    if !verify_signature(body_str, sig) {
+        print("✗ Invalid signature: {sig}")
+        res.status(403).json({error: "invalid signature"})
+        return
+    }
+
+    event = json.parse(body_str)
+    print("✓ Verified webhook: id={event.id}  type={event.type}")
+    res.json({ok: true, received: event.id})
+})
+
+# ─── Demo: replay attack prevention with timestamp ────────────────────────────
+
+server.post("/secure-receive", fn(req, res) {
+    body_str = req.raw_body()
+    sig      = req.header("X-Webhook-Signature") ?? ""
+    ts_str   = req.header("X-Webhook-Timestamp") ?? "0"
+
+    # Reject if older than 5 minutes
+    ts  = int(ts_str)
+    age = time.unix() - ts
+    if age > 300 {
+        res.status(400).json({error: "webhook too old ({age}s)"})
+        return
+    }
+
+    # Signature covers timestamp + body
+    signed_str = "{ts_str}.{body_str}"
+    if !verify_signature(signed_str, sig) {
+        res.status(403).json({error: "invalid signature"})
+        return
+    }
+
+    res.json({ok: true, age_seconds: age})
+})
+
+print("HMAC Webhook server on http://localhost:3031")
+print("POST /dispatch      — send signed webhook")
+print("POST /receive       — verify incoming webhook")

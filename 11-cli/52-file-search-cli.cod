@@ -1,0 +1,49 @@
+# File Search CLI (grep-like)
+# Search for a pattern across files in a directory
+# codong run 52-file-search-cli.cod -- "TODO" ./src
+# codong run 52-file-search-cli.cod -- "error" ./logs --ext .log
+
+args    = env.args()
+pattern = args[0] ?? "TODO"
+dir     = args[1] ?? "."
+ext_filter = args[3] ?? ""   # args[2] is "--ext"
+
+print("Searching for \"{pattern}\" in {dir} ...\n")
+
+fn search_file(path, pattern) {
+    content = fs.read(path)
+    lines   = content.split("\n")
+    matches = []
+    lines.each_with_index(fn(line, i) {
+        if line.contains(pattern) {
+            matches.push({line: i + 1, text: line.trim()})
+        }
+    })
+    return matches
+}
+
+files       = fs.ls(dir, recursive: true)
+total_files = 0
+total_hits  = 0
+
+files.each(fn(f) {
+    if ext_filter != "" and !f.ends_with(ext_filter) { return }
+    if !fs.is_file(f) { return }
+
+    hits = search_file(f, pattern)
+    if hits.len() > 0 {
+        total_files = total_files + 1
+        print("── {f}")
+        hits.each(fn(h) {
+            total_hits = total_hits + 1
+            print("   L{h.line}: {h.text}")
+        })
+        print("")
+    }
+})
+
+if total_hits == 0 {
+    print("No matches found.")
+} else {
+    print("Found {total_hits} match(es) in {total_files} file(s).")
+}

@@ -1,0 +1,149 @@
+# Builder Pattern
+# Fluent builders for SQL queries, HTTP requests, and email messages
+# codong run 90-builder-pattern.cod
+
+# ── Builder: SQL Query ───────────────────────────────────────────────────────
+
+fn query_builder(table) {
+    q = {
+        _table   : table,
+        _fields  : ["*"],
+        _where   : [],
+        _order   : "",
+        _limit   : 0,
+        _offset  : 0,
+        _joins   : [],
+    }
+
+    q.select = fn(...fields) { q._fields = fields; return q }
+    q.where  = fn(cond)      { q._where.push(cond); return q }
+    q.order  = fn(col, dir)  { q._order = "{col} {dir ?? 'ASC'}"; return q }
+    q.limit  = fn(n)         { q._limit = n;  return q }
+    q.offset = fn(n)         { q._offset = n; return q }
+    q.join   = fn(tbl, on)   { q._joins.push("JOIN {tbl} ON {on}"); return q }
+
+    q.build  = fn() {
+        sql = "SELECT {q._fields.join(', ')} FROM {q._table}"
+        q._joins.each(fn(j) { sql = sql + " " + j })
+        if q._where.len() > 0 {
+            sql = sql + " WHERE " + q._where.join(" AND ")
+        }
+        if q._order != "" { sql = sql + " ORDER BY " + q._order }
+        if q._limit  > 0  { sql = sql + " LIMIT "    + str(q._limit) }
+        if q._offset > 0  { sql = sql + " OFFSET "   + str(q._offset) }
+        return sql
+    }
+
+    return q
+}
+
+# ── Builder: HTTP Request ────────────────────────────────────────────────────
+
+fn http_request_builder(method, url) {
+    r = {
+        _method  : method,
+        _url     : url,
+        _headers : {},
+        _params  : {},
+        _body    : nil,
+        _timeout : 5000,
+        _retries : 0,
+    }
+
+    r.header  = fn(k, v)   { r._headers[k] = v;  return r }
+    r.param   = fn(k, v)   { r._params[k]  = v;  return r }
+    r.body    = fn(data)   { r._body = data;       return r }
+    r.timeout = fn(ms)     { r._timeout = ms;      return r }
+    r.retry   = fn(n)      { r._retries = n;       return r }
+    r.bearer  = fn(token)  { r._headers["Authorization"] = "Bearer {token}"; return r }
+    r.json    = fn()       { r._headers["Content-Type"] = "application/json"; return r }
+
+    r.build   = fn() {
+        return {
+            method  : r._method,
+            url     : r._url,
+            headers : r._headers,
+            params  : r._params,
+            body    : r._body,
+            timeout : r._timeout,
+            retries : r._retries,
+        }
+    }
+
+    r.send = fn() {
+        req = r.build()
+        return http.request(req.method, req.url,
+            body: req.body, headers: req.headers, timeout: req.timeout)
+    }
+
+    return r
+}
+
+# ── Builder: Email Message ────────────────────────────────────────────────────
+
+fn email_builder() {
+    e = {
+        _from    : "",
+        _to      : [],
+        _cc      : [],
+        _bcc     : [],
+        _subject : "",
+        _text    : "",
+        _html    : "",
+        _attachments: [],
+    }
+
+    e.from    = fn(addr)       { e._from = addr; return e }
+    e.to      = fn(...addrs)   { e._to = e._to.concat(addrs); return e }
+    e.cc      = fn(...addrs)   { e._cc = e._cc.concat(addrs); return e }
+    e.subject = fn(s)          { e._subject = s;  return e }
+    e.text    = fn(t)          { e._text = t;     return e }
+    e.html    = fn(h)          { e._html = h;     return e }
+    e.attach  = fn(path, name) { e._attachments.push({path: path, name: name}); return e }
+    e.build   = fn() {
+        if e._from == ""      { error("email requires 'from'") }
+        if e._to.len() == 0   { error("email requires at least one 'to'") }
+        if e._subject == ""   { error("email requires 'subject'") }
+        return e
+    }
+
+    return e
+}
+
+# ── Demo ──────────────────────────────────────────────────────────────────────
+
+print("── SQL Query Builder ───────────────────────")
+sql = query_builder("orders")
+    .select("id", "user_id", "total", "status")
+    .join("users", "users.id = orders.user_id")
+    .where("status = 'paid'")
+    .where("total > 50")
+    .order("created_at", "DESC")
+    .limit(10)
+    .offset(20)
+    .build()
+print(sql)
+
+print("\n── HTTP Request Builder ────────────────────")
+req = http_request_builder("POST", "https://api.example.com/users")
+    .bearer("my-token-123")
+    .json()
+    .body({name: "Alice", role: "admin"})
+    .timeout(3000)
+    .retry(2)
+    .build()
+print(json.pretty(req))
+
+print("\n── Email Builder ───────────────────────────")
+msg = email_builder()
+    .from("no-reply@example.com")
+    .to("alice@example.com", "bob@example.com")
+    .cc("manager@example.com")
+    .subject("Your order has shipped!")
+    .text("Hi Alice, your order #1234 has shipped.")
+    .html("<h1>Order Shipped</h1><p>Order #1234 is on its way!</p>")
+    .attach("invoice.pdf", "Invoice-1234.pdf")
+    .build()
+print("To     : {msg._to.join(', ')}")
+print("Subject: {msg._subject}")
+print("Attach : {msg._attachments.len()} file(s)")

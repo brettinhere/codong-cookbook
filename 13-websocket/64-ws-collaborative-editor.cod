@@ -1,0 +1,82 @@
+# WebSocket Collaborative Text Editor
+# Multiple users edit the same document; changes broadcast in real time
+# codong run 64-ws-collaborative-editor.cod
+
+server    = web.serve(port: 4003)
+documents = {}   # doc_id -> {content, version, clients: []}
+
+fn get_doc(id) {
+    if !documents.has(id) {
+        documents[id] = {content: "", version: 0, clients: []}
+    }
+    return documents[id]
+}
+
+# REST: create or get a document
+server.get("/doc/:id", fn(req, res) {
+    doc = get_doc(req.param("id"))
+    res.json({content: doc.content, version: doc.version})
+})
+
+# WebSocket: real-time collaboration
+server.ws("/doc/:id/ws", fn(ws) {
+    doc_id  = ws.param("id")
+    ws_id   = ws.id()
+    doc     = get_doc(doc_id)
+    doc.clients.push(ws_id)
+
+    print("Client {ws_id} joined doc '{doc_id}' (v{doc.version})")
+
+    # Send current state immediately
+    ws.send(json.encode({
+        type    : "init",
+        content : doc.content,
+        version : doc.version,
+        peers   : doc.clients.len() - 1,
+    }))
+
+    # Notify others
+    ws.broadcast_except(doc_id, ws_id, json.encode({
+        type  : "peer_joined",
+        peers : doc.clients.len(),
+    }))
+
+    ws.on("message", fn(msg) {
+        data = json.parse(msg)
+
+        if data.type == "patch" {
+            # Simple last-write-wins; real OT/CRDT would go here
+            if data.version >= doc.version {
+                doc.content = data.content
+                doc.version = doc.version + 1
+                ws.broadcast_except(doc_id, ws_id, json.encode({
+                    type    : "patch",
+                    content : doc.content,
+                    version : doc.version,
+                    from    : ws_id.slice(0, 6),
+                }))
+            } else {
+                ws.send(json.encode({type: "conflict", server_version: doc.version}))
+            }
+        }
+
+        if data.type == "cursor" {
+            ws.broadcast_except(doc_id, ws_id, json.encode({
+                type   : "cursor",
+                from   : ws_id.slice(0, 6),
+                offset : data.offset,
+            }))
+        }
+    })
+
+    ws.on("close", fn() {
+        doc.clients = doc.clients.filter(fn(id) { id != ws_id })
+        ws.broadcast_except(doc_id, ws_id, json.encode({
+            type  : "peer_left",
+            peers : doc.clients.len(),
+        }))
+        print("Client {ws_id} left doc '{doc_id}'")
+    })
+})
+
+print("Collaborative editor on ws://localhost:4003/doc/:id/ws")

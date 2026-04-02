@@ -1,0 +1,52 @@
+# Daily Digest Cron Job
+# Run every day at 08:00: summarise yesterday's DB activity and send report
+# Schedule: codong run 56-daily-digest-cron.cod
+# Cron:     0 8 * * * codong run /path/to/56-daily-digest-cron.cod
+
+db.connect("sqlite:///app.db")
+
+yesterday = time.now().add(days: -1).format("YYYY-MM-DD")
+today     = time.now().format("YYYY-MM-DD HH:mm")
+
+print("[{today}] Running daily digest for {yesterday} ...")
+
+# Gather stats
+new_users  = db.count("users",  "DATE(created_at) = '{yesterday}'")
+new_orders = db.count("orders", "DATE(created_at) = '{yesterday}'")
+revenue    = db.sum("orders",   "amount", "DATE(created_at) = '{yesterday}' AND status = 'paid'") ?? 0
+errors     = db.count("error_logs", "DATE(ts) = '{yesterday}'")
+
+# Top 5 pages
+top_pages = db.query("
+    SELECT path, COUNT(*) as hits
+    FROM page_views
+    WHERE DATE(ts) = ?
+    GROUP BY path
+    ORDER BY hits DESC
+    LIMIT 5
+", [yesterday])
+
+# Build report
+lines = [
+    "Daily Digest — {yesterday}",
+    "================================",
+    "New users    : {new_users}",
+    "New orders   : {new_orders}",
+    "Revenue      : ${revenue}",
+    "Error count  : {errors}",
+    "",
+    "Top pages:",
+]
+
+top_pages.each(fn(p) {
+    lines.push("  {p.hits} hits — {p.path}")
+})
+
+report = lines.join("\n")
+print(report)
+
+# Save to file
+outfile = "digests/digest-{yesterday}.txt"
+fs.mkdir("digests")
+fs.write(outfile, report)
+print("Saved to {outfile}")

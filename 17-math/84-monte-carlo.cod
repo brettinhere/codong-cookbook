@@ -1,0 +1,85 @@
+# Monte Carlo Simulation
+# Estimate π, simulate portfolio risk, and solve the birthday problem
+# codong run 84-monte-carlo.cod
+
+fn estimate_pi(n) {
+    # Throw n random darts at a unit circle
+    inside = 0
+    i      = 0
+    while i < n {
+        x = math.random() * 2 - 1   # [-1, 1]
+        y = math.random() * 2 - 1
+        if x * x + y * y <= 1 { inside = inside + 1 }
+        i = i + 1
+    }
+    return (4.0 * inside / n).round(6)
+}
+
+fn portfolio_var(daily_returns, confidence, simulations) {
+    # Value-at-Risk: what's the worst expected loss at given confidence level?
+    mean_r = daily_returns.reduce(fn(a, b) { a + b }, 0) / daily_returns.len()
+    sq_dev = daily_returns.map(fn(r) { (r - mean_r) ** 2 })
+    std_r  = math.sqrt(sq_dev.reduce(fn(a, b) { a + b }, 0) / daily_returns.len())
+
+    simulated = []
+    i          = 0
+    while i < simulations {
+        # Box-Muller transform for normal random
+        u1 = math.random()
+        u2 = math.random()
+        z  = math.sqrt(-2 * math.log(u1)) * math.cos(2 * 3.14159 * u2)
+        simulated.push(mean_r + z * std_r)
+        i = i + 1
+    }
+
+    simulated = simulated.sort()
+    idx       = math.floor((1 - confidence) * simulations)
+    return simulated[idx].round(4)
+}
+
+fn birthday_probability(n, trials) {
+    # What's the probability that in a group of n people, 2 share a birthday?
+    matches = 0
+    i       = 0
+    while i < trials {
+        birthdays = []
+        j         = 0
+        collision = false
+        while j < n and !collision {
+            b = math.floor(math.random() * 365)
+            if birthdays.contains(b) {
+                collision = true
+                matches   = matches + 1
+            }
+            birthdays.push(b)
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return (matches / trials * 100).round(2)
+}
+
+# ── Run simulations ───────────────────────────────────────────────────────────
+
+print("── Estimating π ────────────────────────")
+[1000, 10000, 100000, 1000000].each(fn(n) {
+    pi = estimate_pi(n)
+    err = (pi - 3.14159265).abs().round(6)
+    print("  n={n}: π ≈ {pi}  (error: {err})")
+})
+
+print("\n── Portfolio VaR (daily returns) ───────")
+# Simulated daily returns for a stock portfolio (%)
+returns = [-0.012, 0.008, 0.015, -0.003, 0.021, -0.018, 0.005,
+            0.009, -0.025, 0.011, 0.003, -0.007, 0.014, -0.002]
+
+var_95 = portfolio_var(returns, 0.95, 100000)
+var_99 = portfolio_var(returns, 0.99, 100000)
+print("  VaR (95% confidence): {var_95 * 100}% daily loss")
+print("  VaR (99% confidence): {var_99 * 100}% daily loss")
+
+print("\n── Birthday Problem ────────────────────")
+[10, 20, 23, 30, 40, 50].each(fn(n) {
+    prob = birthday_probability(n, 10000)
+    print("  n={n} people: {prob}% chance of shared birthday")
+})

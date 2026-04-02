@@ -1,0 +1,36 @@
+# Metrics Snapshot Cron Job
+# Every hour: take a snapshot of key metrics and store for trending
+# Cron: 0 * * * * codong run /path/to/60-metrics-snapshot-cron.cod
+
+db.connect("sqlite:///app.db")
+
+db.query("CREATE TABLE IF NOT EXISTS metrics_snapshots (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT,
+    metric     TEXT,
+    value      REAL
+)", [])
+
+ts = time.now().format("YYYY-MM-DD HH:mm:00")
+print("[{ts}] Taking metrics snapshot ...")
+
+metrics = {
+    active_users_24h  : db.count("users",  "last_seen > datetime('now', '-24 hours')"),
+    new_signups_1h    : db.count("users",  "created_at > datetime('now', '-1 hour')"),
+    orders_1h         : db.count("orders", "created_at > datetime('now', '-1 hour')"),
+    revenue_1h        : db.sum("orders", "amount", "created_at > datetime('now', '-1 hour') AND status = 'paid'") ?? 0,
+    error_rate_1h     : db.count("error_logs", "ts > datetime('now', '-1 hour')"),
+    avg_response_ms   : db.avg("request_logs", "duration_ms", "ts > datetime('now', '-1 hour')") ?? 0,
+}
+
+metrics.each(fn(name, value) {
+    db.query("INSERT INTO metrics_snapshots (ts, metric, value) VALUES (?, ?, ?)",
+        [ts, name, value])
+    print("  {name} = {value}")
+})
+
+# Clean up snapshots older than 90 days
+cutoff = time.now().add(days: -90).format("YYYY-MM-DD")
+db.query("DELETE FROM metrics_snapshots WHERE ts < ?", [cutoff])
+
+print("[{ts}] Snapshot saved. {metrics.keys().len()} metrics recorded.")

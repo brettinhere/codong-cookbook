@@ -1,0 +1,44 @@
+# Word Count CLI (wc-like)
+# Count lines, words, characters in one or more files
+# codong run 55-word-count-cli.cod -- file.txt
+# codong run 55-word-count-cli.cod -- *.txt
+
+args = env.args()
+
+if args.len() == 0 {
+    print("Usage: codong run 55-word-count-cli.cod -- <file> [file2 ...]")
+    env.exit(1)
+}
+
+fn count_file(path) {
+    content = fs.read(path)
+    lines   = content.split("\n").len()
+    words   = content.split(" ").filter(fn(w) { w.trim() != "" }).len()
+    chars   = content.len()
+    return {lines: lines, words: words, chars: chars, path: path}
+}
+
+results     = args.map(fn(f) { count_file(f) })
+total_lines = results.reduce(fn(acc, r) { acc + r.lines }, 0)
+total_words = results.reduce(fn(acc, r) { acc + r.words }, 0)
+total_chars = results.reduce(fn(acc, r) { acc + r.chars }, 0)
+
+# Header
+print("\n  lines    words    chars   file")
+print("  ─────    ─────    ─────   ────")
+
+results.each(fn(r) {
+    l = str(r.lines).pad_start(7)
+    w = str(r.words).pad_start(8)
+    c = str(r.chars).pad_start(8)
+    print("{l} {w} {c}   {r.path}")
+})
+
+if results.len() > 1 {
+    l = str(total_lines).pad_start(7)
+    w = str(total_words).pad_start(8)
+    c = str(total_chars).pad_start(8)
+    print("  ─────    ─────    ─────")
+    print("{l} {w} {c}   total")
+}
+print("")

@@ -1,0 +1,66 @@
+# Sitemap Crawler
+# Parse sitemap.xml, crawl all URLs, check status codes and response times
+# codong run 79-sitemap-crawler.cod -- https://example.com/sitemap.xml
+
+args = env.args()
+sitemap_url = args[0] ?? "https://codong.org/sitemap.xml"
+CONCURRENCY = 5
+
+db.connect("sqlite:///crawl.db")
+db.query("CREATE TABLE IF NOT EXISTS crawl_results (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    url          TEXT,
+    status       INTEGER,
+    response_ms  INTEGER,
+    content_type TEXT,
+    error        TEXT,
+    crawled_at   TEXT
+)", [])
+
+print("Fetching sitemap: {sitemap_url} ...\n")
+
+resp = http.get(sitemap_url, timeout: 10000)
+if resp.is_err() {
+    print("Failed to fetch sitemap: {resp.error()}")
+    env.exit(1)
+}
+
+# Parse URLs from XML sitemap
+urls = xml.parse_sitemap(resp.body)
+print("Found {urls.len()} URLs in sitemap\n")
+
+ts       = time.now().format("YYYY-MM-DD HH:mm:ss")
+ok_count = 0
+errors   = []
+
+# Crawl concurrently
+results = concurrent.map(urls, CONCURRENCY, fn(url) {
+    start  = time.unix_ms()
+    r      = http.get(url, timeout: 10000, follow_redirects: true)
+    ms     = time.unix_ms() - start
+    status = r.is_err() ? 0 : r.status
+    ct     = r.is_err() ? "" : (r.headers["Content-Type"] ?? "")
+    err    = r.is_err() ? r.error() : ""
+
+    return {url: url, status: status, ms: ms, content_type: ct, error: err}
+})
+
+results.each(fn(r) {
+    db.query("INSERT INTO crawl_results (url, status, response_ms, content_type, error, crawled_at)
+              VALUES (?, ?, ?, ?, ?, ?)", [r.url, r.status, r.ms, r.content_type, r.error, ts])
+
+    if r.status >= 200 and r.status < 300 {
+        ok_count = ok_count + 1
+        print("  ✓ {r.status}  {r.ms}ms  {r.url}")
+    } else {
+        errors.push(r)
+        print("  ✗ {r.status}  {r.ms}ms  {r.url}  {r.error}")
+    }
+})
+
+avg_ms = results.reduce(fn(acc, r) { acc + r.ms }, 0) / results.len()
+print("\n── Summary ─────────────────────────────")
+print("  Total URLs : {urls.len()}")
+print("  OK (2xx)   : {ok_count}")
+print("  Errors     : {errors.len()}")
+print("  Avg time   : {avg_ms.round(0)}ms")

@@ -1,0 +1,69 @@
+# Delayed Task Scheduler
+# Schedule a task to run after a delay (like setTimeout but persistent via Redis)
+# codong run 70-task-scheduler.cod -- schedule  (add delayed tasks)
+# codong run 70-task-scheduler.cod -- run        (process due tasks)
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+SCHEDULE_KEY = "scheduler:tasks"
+
+fn schedule_at(type, payload, delay_seconds) {
+    run_at = time.unix() + delay_seconds
+    task   = json.encode({
+        id      : str(time.unix() * 1000),
+        type    : type,
+        payload : payload,
+        run_at  : run_at,
+    })
+    # Store in sorted set: score = unix timestamp to run at
+    redis.zadd(SCHEDULE_KEY, task, run_at)
+    run_str = time.now().add(seconds: delay_seconds).format("HH:mm:ss")
+    print("  Scheduled: {type} at {run_str} (+{delay_seconds}s)")
+}
+
+fn execute_task(task) {
+    match task.type {
+        "send_email"      => print("  → Email to {task.payload.to}")
+        "expire_promo"    => print("  → Expiring promo code {task.payload.code}")
+        "remind_user"     => print("  → Reminder to user #{task.payload.user_id}")
+        "publish_post"    => print("  → Publishing post #{task.payload.post_id}")
+        _                 => print("  → Unknown task: {task.type}")
+    }
+}
+
+fn run_scheduler() {
+    print("Scheduler running (checking every second) ...\n")
+    while true {
+        now  = time.unix()
+        # Get all tasks due now or in the past
+        due  = redis.zrangebyscore(SCHEDULE_KEY, 0, now)
+
+        due.each(fn(raw) {
+            task = json.parse(raw)
+            ts   = time.now().format("HH:mm:ss")
+            print("[{ts}] Due: {task.type}")
+            execute_task(task)
+            redis.zrem(SCHEDULE_KEY, raw)
+        })
+
+        pending = redis.zcard(SCHEDULE_KEY)
+        if pending == 0 { break }
+        time.sleep(1000)
+    }
+    print("\nAll scheduled tasks complete.")
+}
+
+fn add_test_tasks() {
+    schedule_at("send_email",   {to: "alice@example.com"}, 2)
+    schedule_at("remind_user",  {user_id: 42},             5)
+    schedule_at("expire_promo", {code: "SAVE20"},          8)
+    schedule_at("publish_post", {post_id: 99},             10)
+    print("4 tasks scheduled.")
+}
+
+cmd = env.args()[0] ?? "run"
+match cmd {
+    "schedule" => add_test_tasks()
+    "run"      => run_scheduler()
+    _ => print("Usage: codong run 70-task-scheduler.cod -- [schedule|run]")
+}

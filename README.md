@@ -8,7 +8,7 @@
 
 # Codong Cookbook
 
-> **50 real-world programs** — every module, every pattern, every feature of the [Codong](https://codong.org) language in one open-source collection.
+> **100 real-world programs** — every module, every pattern, every feature of the [Codong](https://codong.org) language in one open-source collection.
 
 ```
 curl -fsSL https://codong.org/install.sh | sh
@@ -38,7 +38,7 @@ server.get("/hello/:name", fn(req, res) {
 
 ## What is This Cookbook?
 
-This repository contains **50 standalone `.cod` programs** organized into 10 topic areas. Each file:
+This repository contains **100 standalone `.cod` programs** organized into 20 topic areas. Each file:
 
 - Runs with a single `codong run` command
 - Demonstrates one or more Codong modules/features
@@ -114,15 +114,85 @@ codong-cookbook/
 │   ├── 41-binary-search-tree.cod
 │   └── 42-functional-patterns.cod
 │
-└── 10-data-processing/        # CSV, JSON, reports, validation, ETL, full-stack
-    ├── 43-csv-processor.cod
-    ├── 44-json-transformer.cod
-    ├── 45-report-generator.cod
-    ├── 46-data-validator.cod
-    ├── 47-event-system.cod
-    ├── 48-state-machine.cod
-    ├── 49-pipeline-etl.cod
-    └── 50-full-stack-app.cod
+├── 10-data-processing/        # CSV, JSON, reports, validation, ETL, full-stack
+│   ├── 43-csv-processor.cod
+│   ├── 44-json-transformer.cod
+│   ├── 45-report-generator.cod
+│   ├── 46-data-validator.cod
+│   ├── 47-event-system.cod
+│   ├── 48-state-machine.cod
+│   ├── 49-pipeline-etl.cod
+│   └── 50-full-stack-app.cod
+│
+├── 11-cli/                    # Command-line tools, argument parsing, file search
+│   ├── 51-todo-cli.cod
+│   ├── 52-file-search-cli.cod
+│   ├── 53-json-lint-cli.cod
+│   ├── 54-env-doctor-cli.cod
+│   └── 55-word-count-cli.cod
+│
+├── 12-cron/                   # Scheduled jobs, digests, cleanup, metrics
+│   ├── 56-daily-digest-cron.cod
+│   ├── 57-db-cleanup-cron.cod
+│   ├── 58-health-ping-cron.cod
+│   ├── 59-cache-warmup-cron.cod
+│   └── 60-metrics-snapshot-cron.cod
+│
+├── 13-websocket/              # Real-time chat, tickers, notifications, multiplayer
+│   ├── 61-ws-chat-server.cod
+│   ├── 62-ws-live-ticker.cod
+│   ├── 63-ws-notifications.cod
+│   ├── 64-ws-collaborative-editor.cod
+│   └── 65-ws-game-server.cod
+│
+├── 14-queue/                  # Job queues, worker pools, priority, DLQ, scheduler
+│   ├── 66-job-queue.cod
+│   ├── 67-worker-pool.cod
+│   ├── 68-priority-queue.cod
+│   ├── 69-dead-letter-queue.cod
+│   └── 70-task-scheduler.cod
+│
+├── 15-crypto/                 # bcrypt, AES-256, API keys, HMAC, token vault
+│   ├── 71-password-hashing.cod
+│   ├── 72-aes-encrypt-decrypt.cod
+│   ├── 73-api-key-system.cod
+│   ├── 74-hmac-webhook-security.cod
+│   └── 75-token-vault.cod
+│
+├── 16-scraping/               # RSS, price monitor, API polling, sitemap, GitHub trending
+│   ├── 76-news-aggregator.cod
+│   ├── 77-price-monitor.cod
+│   ├── 78-api-poller.cod
+│   ├── 79-sitemap-crawler.cod
+│   └── 80-github-trending.cod
+│
+├── 17-math/                   # Statistics, matrices, time series, Monte Carlo
+│   ├── 81-statistics-lib.cod
+│   ├── 82-matrix-operations.cod
+│   ├── 83-time-series.cod
+│   ├── 84-monte-carlo.cod
+│   └── 85-unit-converter.cod
+│
+├── 18-patterns/               # Observer, Strategy, Decorator, Command, Builder
+│   ├── 86-observer-pattern.cod
+│   ├── 87-strategy-pattern.cod
+│   ├── 88-decorator-pattern.cod
+│   ├── 89-command-pattern.cod
+│   └── 90-builder-pattern.cod
+│
+├── 19-testing/                # Unit tests, mocks, property tests, load tests, snapshots
+│   ├── 91-unit-test-runner.cod
+│   ├── 92-mock-http-server.cod
+│   ├── 93-property-testing.cod
+│   ├── 94-load-tester.cod
+│   └── 95-snapshot-testing.cod
+│
+└── 20-email/                  # SMTP, templates, digests, bounce handling, queue
+    ├── 96-send-email.cod
+    ├── 97-email-template-engine.cod
+    ├── 98-email-digest.cod
+    ├── 99-bounce-handler.cod
+    └── 100-email-queue.cod
 ```
 
 ---
@@ -498,6 +568,148 @@ Order lifecycle:
 
 ---
 
+## Examples 51–100
+
+### 11 · CLI Tools (`env`, `fs`, `db`)
+
+Build command-line tools with argument parsing, file operations, and subcommands.
+
+| # | File | Description |
+|---|------|-------------|
+| 51 | [51-todo-cli.cod](11-cli/51-todo-cli.cod) | CLI todo manager: add / list / done / delete |
+| 52 | [52-file-search-cli.cod](11-cli/52-file-search-cli.cod) | grep-like recursive file content search |
+| 53 | [53-json-lint-cli.cod](11-cli/53-json-lint-cli.cod) | JSON validator and pretty-printer |
+| 54 | [54-env-doctor-cli.cod](11-cli/54-env-doctor-cli.cod) | Check environment variables and services |
+| 55 | [55-word-count-cli.cod](11-cli/55-word-count-cli.cod) | Count lines, words, chars across files |
+
+---
+
+### 12 · Cron Jobs (scheduled tasks)
+
+Recurring background scripts — run with system cron or any task scheduler.
+
+| # | File | Description |
+|---|------|-------------|
+| 56 | [56-daily-digest-cron.cod](12-cron/56-daily-digest-cron.cod) | Daily activity summary from DB |
+| 57 | [57-db-cleanup-cron.cod](12-cron/57-db-cleanup-cron.cod) | Delete expired/soft-deleted records + VACUUM |
+| 58 | [58-health-ping-cron.cod](12-cron/58-health-ping-cron.cod) | Ping production endpoints, alert on failure |
+| 59 | [59-cache-warmup-cron.cod](12-cron/59-cache-warmup-cron.cod) | Pre-warm Redis cache before peak hours |
+| 60 | [60-metrics-snapshot-cron.cod](12-cron/60-metrics-snapshot-cron.cod) | Hourly metrics snapshot for trending |
+
+---
+
+### 13 · WebSocket (`web.ws`)
+
+Full-duplex real-time communication between server and browser clients.
+
+| # | File | Description |
+|---|------|-------------|
+| 61 | [61-ws-chat-server.cod](13-websocket/61-ws-chat-server.cod) | Multi-room group chat server |
+| 62 | [62-ws-live-ticker.cod](13-websocket/62-ws-live-ticker.cod) | Live stock price feed (1s tick) |
+| 63 | [63-ws-notifications.cod](13-websocket/63-ws-notifications.cod) | Push notifications with offline queue |
+| 64 | [64-ws-collaborative-editor.cod](13-websocket/64-ws-collaborative-editor.cod) | Real-time collaborative text editor |
+| 65 | [65-ws-game-server.cod](13-websocket/65-ws-game-server.cod) | Multiplayer shared-canvas game |
+
+---
+
+### 14 · Job Queues (`redis`)
+
+Reliable background job processing with retry, priority, and dead-letter patterns.
+
+| # | File | Description |
+|---|------|-------------|
+| 66 | [66-job-queue.cod](14-queue/66-job-queue.cod) | Redis-backed job queue with worker |
+| 67 | [67-worker-pool.cod](14-queue/67-worker-pool.cod) | Concurrent worker pool (N goroutines) |
+| 68 | [68-priority-queue.cod](14-queue/68-priority-queue.cod) | Priority queue via sorted sets |
+| 69 | [69-dead-letter-queue.cod](14-queue/69-dead-letter-queue.cod) | DLQ pattern: retry → fail → replay |
+| 70 | [70-task-scheduler.cod](14-queue/70-task-scheduler.cod) | Persistent delayed task execution |
+
+---
+
+### 15 · Cryptography (`crypto`)
+
+Secure password hashing, symmetric encryption, API keys, HMAC signatures, and secret storage.
+
+| # | File | Description |
+|---|------|-------------|
+| 71 | [71-password-hashing.cod](15-crypto/71-password-hashing.cod) | bcrypt hash/verify + policy check + migration |
+| 72 | [72-aes-encrypt-decrypt.cod](15-crypto/72-aes-encrypt-decrypt.cod) | AES-256-GCM field-level + envelope encryption |
+| 73 | [73-api-key-system.cod](15-crypto/73-api-key-system.cod) | Issue, validate, revoke API keys (SQLite) |
+| 74 | [74-hmac-webhook-security.cod](15-crypto/74-hmac-webhook-security.cod) | HMAC-SHA256 webhook signing + verification |
+| 75 | [75-token-vault.cod](15-crypto/75-token-vault.cod) | AES-encrypted secret vault with key rotation |
+
+---
+
+### 16 · Scraping & Polling (`http`, `xml`, `db`)
+
+Collect data from the web automatically and detect changes over time.
+
+| # | File | Description |
+|---|------|-------------|
+| 76 | [76-news-aggregator.cod](16-scraping/76-news-aggregator.cod) | Multi-feed RSS aggregator with dedup |
+| 77 | [77-price-monitor.cod](16-scraping/77-price-monitor.cod) | Track product prices, alert on drops |
+| 78 | [78-api-poller.cod](16-scraping/78-api-poller.cod) | Poll API, store snapshots, detect field changes |
+| 79 | [79-sitemap-crawler.cod](16-scraping/79-sitemap-crawler.cod) | Crawl sitemap, check status codes + speed |
+| 80 | [80-github-trending.cod](16-scraping/80-github-trending.cod) | Scrape GitHub trending, expose as API |
+
+---
+
+### 17 · Math & Data Science
+
+Pure Codong math: statistics, matrices, time series, simulations, and unit conversion.
+
+| # | File | Description |
+|---|------|-------------|
+| 81 | [81-statistics-lib.cod](17-math/81-statistics-lib.cod) | mean, median, mode, std dev, percentile, Pearson r |
+| 82 | [82-matrix-operations.cod](17-math/82-matrix-operations.cod) | Matrix add, multiply, transpose, determinant |
+| 83 | [83-time-series.cod](17-math/83-time-series.cod) | SMA, EMA, trend detection, anomaly detection |
+| 84 | [84-monte-carlo.cod](17-math/84-monte-carlo.cod) | π estimation, portfolio VaR, birthday problem |
+| 85 | [85-unit-converter.cod](17-math/85-unit-converter.cod) | Temperature, distance, weight, data size |
+
+---
+
+### 18 · Design Patterns
+
+Classic software engineering patterns implemented in idiomatic Codong.
+
+| # | File | Description |
+|---|------|-------------|
+| 86 | [86-observer-pattern.cod](18-patterns/86-observer-pattern.cod) | EventEmitter with on/once/off/emit |
+| 87 | [87-strategy-pattern.cod](18-patterns/87-strategy-pattern.cod) | Swappable sort and pricing strategies |
+| 88 | [88-decorator-pattern.cod](18-patterns/88-decorator-pattern.cod) | logging, timing, retry, cache, rate-limit wrappers |
+| 89 | [89-command-pattern.cod](18-patterns/89-command-pattern.cod) | Text editor with full undo/redo stack |
+| 90 | [90-builder-pattern.cod](18-patterns/90-builder-pattern.cod) | Fluent builders for SQL, HTTP, and email |
+
+---
+
+### 19 · Testing
+
+Test frameworks, mocking, property-based testing, load testing, and snapshot tests.
+
+| # | File | Description |
+|---|------|-------------|
+| 91 | [91-unit-test-runner.cod](19-testing/91-unit-test-runner.cod) | Lightweight describe/it/expect framework |
+| 92 | [92-mock-http-server.cod](19-testing/92-mock-http-server.cod) | Mock API server with call logging |
+| 93 | [93-property-testing.cod](19-testing/93-property-testing.cod) | Generator-based property verification |
+| 94 | [94-load-tester.cod](19-testing/94-load-tester.cod) | HTTP load tester with p50/p95/p99 output |
+| 95 | [95-snapshot-testing.cod](19-testing/95-snapshot-testing.cod) | Snapshot capture + diff with update mode |
+
+---
+
+### 20 · Email (`email`, `redis`, `db`)
+
+Send, template, queue, and manage transactional email at scale.
+
+| # | File | Description |
+|---|------|-------------|
+| 96 | [96-send-email.cod](20-email/96-send-email.cod) | SMTP send: welcome, reset, invoice, bulk |
+| 97 | [97-email-template-engine.cod](20-email/97-email-template-engine.cod) | HTML templates with variable substitution |
+| 98 | [98-email-digest.cod](20-email/98-email-digest.cod) | Weekly digest email from DB to subscriber list |
+| 99 | [99-bounce-handler.cod](20-email/99-bounce-handler.cod) | SendGrid/SES bounce & complaint webhooks |
+| 100 | [100-email-queue.cod](20-email/100-email-queue.cod) | Redis email queue with rate limiting + retry |
+
+---
+
 ## Language Cheat Sheet
 
 ```codong
@@ -632,7 +844,7 @@ MIT — use freely, modify freely, share freely.
 
 # Codong Cookbook（中文版）
 
-> **50 个真实世界程序** —— 一个开源合集，涵盖 [Codong](https://codong.org) 语言的每一个模块、每一种模式、每一项特性。
+> **100 个真实世界程序** —— 一个开源合集，涵盖 [Codong](https://codong.org) 语言的每一个模块、每一种模式、每一项特性。
 
 ```
 curl -fsSL https://codong.org/install.sh | sh
@@ -662,7 +874,7 @@ server.get("/hello/:name", fn(req, res) {
 
 ## 这个 Cookbook 是什么？
 
-本仓库包含 **50 个独立的 `.cod` 程序**，按 10 个主题分类。每个文件：
+本仓库包含 **100 个独立的 `.cod` 程序**，按 20 个主题分类。每个文件：
 
 - 只需一条 `codong run` 命令即可运行
 - 演示一个或多个 Codong 模块/特性
@@ -738,15 +950,19 @@ codong-cookbook/
 │   ├── 41-binary-search-tree.cod
 │   └── 42-functional-patterns.cod
 │
-└── 10-data-processing/        # CSV、JSON、报表、验证、ETL、全栈应用
-    ├── 43-csv-processor.cod
-    ├── 44-json-transformer.cod
-    ├── 45-report-generator.cod
-    ├── 46-data-validator.cod
-    ├── 47-event-system.cod
-    ├── 48-state-machine.cod
-    ├── 49-pipeline-etl.cod
-    └── 50-full-stack-app.cod
+├── 10-data-processing/        # CSV、JSON、报表、验证、ETL、全栈应用
+│   ├── 43-csv-processor.cod  ...  50-full-stack-app.cod
+│
+├── 11-cli/                    # 命令行工具、参数解析、文件搜索
+├── 12-cron/                   # 定时任务、摘要邮件、清理、指标快照
+├── 13-websocket/              # 实时聊天、行情推送、通知、多人协作
+├── 14-queue/                  # 任务队列、并发池、优先级、死信队列
+├── 15-crypto/                 # bcrypt、AES-256、API Key、HMAC、密钥保险库
+├── 16-scraping/               # RSS 聚合、价格监控、API 轮询、站点爬虫
+├── 17-math/                   # 统计学、矩阵、时间序列、蒙特卡洛
+├── 18-patterns/               # 观察者、策略、装饰器、命令、构建器模式
+├── 19-testing/                # 单元测试、Mock、属性测试、压测、快照测试
+└── 20-email/                  # SMTP 发送、模板、摘要、退信处理、邮件队列
 ```
 
 ---
@@ -1121,6 +1337,128 @@ pipe = fn(...fns) {
                         ▼
                       响应
 ```
+
+---
+
+## 第 51–100 个示例
+
+### 11 · 命令行工具（`env`、`fs`、`db`）
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 51 | [51-todo-cli.cod](11-cli/51-todo-cli.cod) | CLI 待办事项管理器：添加/列表/完成/删除 |
+| 52 | [52-file-search-cli.cod](11-cli/52-file-search-cli.cod) | 类 grep 递归文件内容搜索 |
+| 53 | [53-json-lint-cli.cod](11-cli/53-json-lint-cli.cod) | JSON 验证器与格式化工具 |
+| 54 | [54-env-doctor-cli.cod](11-cli/54-env-doctor-cli.cod) | 检查环境变量与服务是否就绪 |
+| 55 | [55-word-count-cli.cod](11-cli/55-word-count-cli.cod) | 统计文件的行数、单词数、字符数 |
+
+---
+
+### 12 · 定时任务
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 56 | [56-daily-digest-cron.cod](12-cron/56-daily-digest-cron.cod) | 从数据库生成每日活动摘要 |
+| 57 | [57-db-cleanup-cron.cod](12-cron/57-db-cleanup-cron.cod) | 删除过期/软删除记录 + VACUUM |
+| 58 | [58-health-ping-cron.cod](12-cron/58-health-ping-cron.cod) | 心跳检测生产端点，失败时告警 |
+| 59 | [59-cache-warmup-cron.cod](12-cron/59-cache-warmup-cron.cod) | 高峰前预热 Redis 缓存 |
+| 60 | [60-metrics-snapshot-cron.cod](12-cron/60-metrics-snapshot-cron.cod) | 每小时指标快照，用于趋势分析 |
+
+---
+
+### 13 · WebSocket 实时通信
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 61 | [61-ws-chat-server.cod](13-websocket/61-ws-chat-server.cod) | 多房间群聊服务器 |
+| 62 | [62-ws-live-ticker.cod](13-websocket/62-ws-live-ticker.cod) | 实时股价行情推送（1 秒间隔） |
+| 63 | [63-ws-notifications.cod](13-websocket/63-ws-notifications.cod) | 推送通知，含离线消息队列 |
+| 64 | [64-ws-collaborative-editor.cod](13-websocket/64-ws-collaborative-editor.cod) | 实时多人协作文本编辑器 |
+| 65 | [65-ws-game-server.cod](13-websocket/65-ws-game-server.cod) | 多人共享画布游戏服务器 |
+
+---
+
+### 14 · 任务队列（`redis`）
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 66 | [66-job-queue.cod](14-queue/66-job-queue.cod) | Redis 任务队列 + Worker |
+| 67 | [67-worker-pool.cod](14-queue/67-worker-pool.cod) | N 个并发 Worker 协程池 |
+| 68 | [68-priority-queue.cod](14-queue/68-priority-queue.cod) | 基于有序集合的优先队列 |
+| 69 | [69-dead-letter-queue.cod](14-queue/69-dead-letter-queue.cod) | 死信队列：重试 → 失败 → 重放 |
+| 70 | [70-task-scheduler.cod](14-queue/70-task-scheduler.cod) | 持久化延迟任务调度器 |
+
+---
+
+### 15 · 密码学（`crypto`）
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 71 | [71-password-hashing.cod](15-crypto/71-password-hashing.cod) | bcrypt 哈希/验证 + 策略检查 + 迁移 |
+| 72 | [72-aes-encrypt-decrypt.cod](15-crypto/72-aes-encrypt-decrypt.cod) | AES-256-GCM 字段级 + 信封加密 |
+| 73 | [73-api-key-system.cod](15-crypto/73-api-key-system.cod) | 签发、验证、吊销 API Key |
+| 74 | [74-hmac-webhook-security.cod](15-crypto/74-hmac-webhook-security.cod) | HMAC-SHA256 Webhook 签名与验证 |
+| 75 | [75-token-vault.cod](15-crypto/75-token-vault.cod) | AES 加密的密钥保险库，支持主密钥轮换 |
+
+---
+
+### 16 · 爬虫与轮询
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 76 | [76-news-aggregator.cod](16-scraping/76-news-aggregator.cod) | 多源 RSS 聚合，含去重 |
+| 77 | [77-price-monitor.cod](16-scraping/77-price-monitor.cod) | 监控商品价格，降价时告警 |
+| 78 | [78-api-poller.cod](16-scraping/78-api-poller.cod) | API 轮询，存储快照，检测字段变化 |
+| 79 | [79-sitemap-crawler.cod](16-scraping/79-sitemap-crawler.cod) | 爬取 Sitemap，检查状态码与响应速度 |
+| 80 | [80-github-trending.cod](16-scraping/80-github-trending.cod) | 抓取 GitHub Trending，封装为 API |
+
+---
+
+### 17 · 数学与数据科学
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 81 | [81-statistics-lib.cod](17-math/81-statistics-lib.cod) | 均值、中位数、众数、标准差、百分位、相关系数 |
+| 82 | [82-matrix-operations.cod](17-math/82-matrix-operations.cod) | 矩阵加法、乘法、转置、行列式 |
+| 83 | [83-time-series.cod](17-math/83-time-series.cod) | SMA、EMA、趋势检测、异常检测 |
+| 84 | [84-monte-carlo.cod](17-math/84-monte-carlo.cod) | π 估算、投资组合 VaR、生日问题 |
+| 85 | [85-unit-converter.cod](17-math/85-unit-converter.cod) | 温度、距离、重量、数据大小转换 |
+
+---
+
+### 18 · 设计模式
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 86 | [86-observer-pattern.cod](18-patterns/86-observer-pattern.cod) | EventEmitter：on/once/off/emit |
+| 87 | [87-strategy-pattern.cod](18-patterns/87-strategy-pattern.cod) | 可替换的排序与定价策略 |
+| 88 | [88-decorator-pattern.cod](18-patterns/88-decorator-pattern.cod) | 日志、计时、重试、缓存、限流装饰器 |
+| 89 | [89-command-pattern.cod](18-patterns/89-command-pattern.cod) | 文本编辑器，带完整撤销/重做栈 |
+| 90 | [90-builder-pattern.cod](18-patterns/90-builder-pattern.cod) | SQL、HTTP 请求、邮件的流式构建器 |
+
+---
+
+### 19 · 测试
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 91 | [91-unit-test-runner.cod](19-testing/91-unit-test-runner.cod) | 轻量级 describe/it/expect 测试框架 |
+| 92 | [92-mock-http-server.cod](19-testing/92-mock-http-server.cod) | 含调用记录的 Mock API 服务器 |
+| 93 | [93-property-testing.cod](19-testing/93-property-testing.cod) | 基于生成器的属性验证 |
+| 94 | [94-load-tester.cod](19-testing/94-load-tester.cod) | HTTP 压测，输出 p50/p95/p99 |
+| 95 | [95-snapshot-testing.cod](19-testing/95-snapshot-testing.cod) | 快照捕获与差异比对，支持更新模式 |
+
+---
+
+### 20 · 邮件（`email`、`redis`、`db`）
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 96 | [96-send-email.cod](20-email/96-send-email.cod) | SMTP 发送：欢迎、重置密码、账单、批量 |
+| 97 | [97-email-template-engine.cod](20-email/97-email-template-engine.cod) | HTML 邮件模板引擎，支持变量替换 |
+| 98 | [98-email-digest.cod](20-email/98-email-digest.cod) | 从数据库生成周报发送给订阅者 |
+| 99 | [99-bounce-handler.cod](20-email/99-bounce-handler.cod) | SendGrid/SES 退信与投诉 Webhook 处理 |
+| 100 | [100-email-queue.cod](20-email/100-email-queue.cod) | Redis 邮件队列，含限速 + 重试 |
 
 ---
 

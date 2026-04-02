@@ -1,0 +1,119 @@
+# Unit Test Runner
+# Lightweight test framework: describe/it/expect with assertions
+# codong run 91-unit-test-runner.cod
+
+# ── Mini Test Framework ───────────────────────────────────────────────────────
+
+pass_count = 0
+fail_count = 0
+current_suite = ""
+
+fn describe(name, f) {
+    current_suite = name
+    print("\n{name}")
+    f()
+}
+
+fn it(desc, f) {
+    result = try(fn() { f() })
+    if result.is_err() {
+        fail_count = fail_count + 1
+        print("  ✗  {desc}")
+        print("     {result.error()}")
+    } else {
+        pass_count = pass_count + 1
+        print("  ✓  {desc}")
+    }
+}
+
+fn expect(actual) {
+    return {
+        to_eq: fn(expected) {
+            if actual != expected {
+                error("expected {json.encode(expected)}, got {json.encode(actual)}")
+            }
+        },
+        to_be_truthy: fn() {
+            if !actual { error("expected truthy, got {actual}") }
+        },
+        to_be_falsy: fn() {
+            if actual { error("expected falsy, got {actual}") }
+        },
+        to_contain: fn(item) {
+            if actual.type() == "string" and !actual.contains(item) {
+                error("expected \"{actual}\" to contain \"{item}\"")
+            }
+            if actual.type() == "list" and !actual.contains(item) {
+                error("expected list to contain {json.encode(item)}")
+            }
+        },
+        to_have_len: fn(n) {
+            if actual.len() != n {
+                error("expected length {n}, got {actual.len()}")
+            }
+        },
+        to_be_gt: fn(n) {
+            if actual <= n { error("expected {actual} > {n}") }
+        },
+        to_throw: fn() {
+            r = try(fn() { actual() })
+            if !r.is_err() { error("expected function to throw") }
+        },
+    }
+}
+
+# ── Code Under Test ───────────────────────────────────────────────────────────
+
+fn add(a, b) { return a + b }
+fn divide(a, b) {
+    if b == 0 { error("division by zero") }
+    return a / b
+}
+fn palindrome(s) {
+    clean = s.lower().replace(" ", "")
+    return clean == clean.reverse()
+}
+fn flatten(arr) {
+    result = []
+    arr.each(fn(item) {
+        if item.type() == "list" {
+            flatten(item).each(fn(v) { result.push(v) })
+        } else {
+            result.push(item)
+        }
+    })
+    return result
+}
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("add()", fn() {
+    it("adds two positive numbers",       fn() { expect(add(2, 3)).to_eq(5) })
+    it("adds negative numbers",           fn() { expect(add(-1, -2)).to_eq(-3) })
+    it("returns float for float input",   fn() { expect(add(1.5, 2.5)).to_eq(4.0) })
+    it("0 + 0 = 0",                       fn() { expect(add(0, 0)).to_eq(0) })
+})
+
+describe("divide()", fn() {
+    it("divides two numbers",             fn() { expect(divide(10, 2)).to_eq(5.0) })
+    it("throws on division by zero",      fn() { expect(fn() { divide(5, 0) }).to_throw() })
+    it("handles negative divisor",        fn() { expect(divide(10, -2)).to_eq(-5.0) })
+})
+
+describe("palindrome()", fn() {
+    it("detects 'racecar'",               fn() { expect(palindrome("racecar")).to_be_truthy() })
+    it("detects 'A man a plan a canal'",  fn() { expect(palindrome("A man a plan a canal Panama")).to_be_truthy() })
+    it("rejects 'hello'",                 fn() { expect(palindrome("hello")).to_be_falsy() })
+})
+
+describe("flatten()", fn() {
+    it("flattens nested list",            fn() { expect(flatten([[1,2],[3,[4,5]]])).to_eq([1,2,3,4,5]) })
+    it("handles empty list",              fn() { expect(flatten([])).to_have_len(0) })
+    it("handles already flat list",       fn() { expect(flatten([1,2,3])).to_eq([1,2,3]) })
+})
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+total = pass_count + fail_count
+print("\n────────────────────────────────────────")
+print("Tests: {total}  ✓ {pass_count}  ✗ {fail_count}")
+if fail_count > 0 { env.exit(1) }

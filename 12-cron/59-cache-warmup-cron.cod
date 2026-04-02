@@ -1,0 +1,40 @@
+# Cache Warmup Cron Job
+# Pre-populate Redis cache before peak traffic hours
+# Cron: 0 7 * * * codong run /path/to/59-cache-warmup-cron.cod
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+db.connect("sqlite:///app.db")
+
+ts = time.now().format("HH:mm:ss")
+print("[{ts}] Starting cache warmup ...")
+warmed = 0
+
+# Warm top 100 products
+products = db.query("SELECT id FROM products ORDER BY view_count DESC LIMIT 100", [])
+products.each(fn(p) {
+    key     = "product:{p.id}"
+    cached  = redis.get(key)
+    if cached == "" {
+        data = db.query("SELECT * FROM products WHERE id = ?", [p.id])
+        if data.len() > 0 {
+            redis.set(key, json.encode(data[0]), ttl: 3600)
+            warmed = warmed + 1
+        }
+    }
+})
+
+# Warm navigation menu (shared across all pages)
+menu = db.query("SELECT id, title, slug FROM categories WHERE active = 1 ORDER BY sort_order", [])
+redis.set("nav:menu", json.encode(menu), ttl: 7200)
+warmed = warmed + 1
+
+# Warm homepage stats
+stats = {
+    total_products : db.count("products", "active = 1"),
+    total_users    : db.count("users", "1=1"),
+    total_orders   : db.count("orders", "status = 'completed'"),
+}
+redis.set("homepage:stats", json.encode(stats), ttl: 1800)
+warmed = warmed + 1
+
+print("[{ts}] Cache warmup complete — {warmed} keys written.")

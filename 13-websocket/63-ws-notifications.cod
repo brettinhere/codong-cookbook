@@ -1,0 +1,67 @@
+# WebSocket Push Notifications
+# Server can push typed notifications to specific users or broadcast
+# codong run 63-ws-notifications.cod
+
+server   = web.serve(port: 4002)
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+clients = {}   # user_id -> ws connection
+
+# WebSocket: client identifies itself with a user token
+server.ws("/notify/:user_id", fn(ws) {
+    user_id = ws.param("user_id")
+    clients[user_id] = ws
+    print("User {user_id} connected for notifications")
+
+    ws.on("close", fn() {
+        clients.delete(user_id)
+        print("User {user_id} disconnected")
+    })
+})
+
+# HTTP: internal API to send a notification to a specific user
+server.post("/send/:user_id", fn(req, res) {
+    user_id = req.param("user_id")
+    body    = req.json()
+    notif   = {
+        type    : body.type    ?? "info",
+        title   : body.title   ?? "Notification",
+        message : body.message ?? "",
+        ts      : time.now().format("HH:mm:ss"),
+    }
+
+    if clients.has(user_id) {
+        clients[user_id].send(json.encode(notif))
+        # Also persist to DB for offline users
+        redis.lpush("notif:{user_id}", json.encode(notif))
+        redis.ltrim("notif:{user_id}", 0, 99)  # keep last 100
+        res.json({ok: true, delivered: "live"})
+    } else {
+        # User offline — queue for next login
+        redis.lpush("notif:{user_id}", json.encode(notif))
+        res.json({ok: true, delivered: "queued"})
+    }
+})
+
+# HTTP: broadcast to all connected users
+server.post("/broadcast", fn(req, res) {
+    body  = req.json()
+    notif = {type: "broadcast", message: body.message, ts: time.now().format("HH:mm:ss")}
+    sent  = 0
+    clients.each(fn(uid, ws) {
+        ws.send(json.encode(notif))
+        sent = sent + 1
+    })
+    res.json({ok: true, sent_to: sent})
+})
+
+# HTTP: get queued notifications for a user (called on login)
+server.get("/queue/:user_id", fn(req, res) {
+    user_id = req.param("user_id")
+    raw     = redis.lrange("notif:{user_id}", 0, -1)
+    notifs  = raw.map(fn(n) { json.parse(n) })
+    redis.del("notif:{user_id}")
+    res.json({notifications: notifs, count: notifs.len()})
+})
+
+print("Notification server on ws://localhost:4002/notify/:user_id")

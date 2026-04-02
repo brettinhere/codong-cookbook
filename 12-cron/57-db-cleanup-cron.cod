@@ -1,0 +1,44 @@
+# Database Cleanup Cron Job
+# Delete old records to keep the database lean
+# Cron: 0 2 * * * codong run /path/to/57-db-cleanup-cron.cod
+
+db.connect("sqlite:///app.db")
+
+now = time.now().format("YYYY-MM-DD HH:mm:ss")
+print("[{now}] Starting DB cleanup ...")
+
+results = {}
+
+# Delete sessions older than 30 days
+cutoff_30 = time.now().add(days: -30).format("YYYY-MM-DD")
+db.query("DELETE FROM sessions WHERE created_at < ?", [cutoff_30])
+results.sessions = db.changes()
+
+# Delete error logs older than 90 days
+cutoff_90 = time.now().add(days: -90).format("YYYY-MM-DD")
+db.query("DELETE FROM error_logs WHERE ts < ?", [cutoff_90])
+results.error_logs = db.changes()
+
+# Delete soft-deleted records older than 7 days
+cutoff_7 = time.now().add(days: -7).format("YYYY-MM-DD")
+db.query("DELETE FROM posts WHERE deleted = 1 AND deleted_at < ?", [cutoff_7])
+results.soft_deleted = db.changes()
+
+# Archive completed orders older than 1 year
+cutoff_1y = time.now().add(days: -365).format("YYYY-MM-DD")
+old_orders = db.query("SELECT * FROM orders WHERE status = 'completed' AND created_at < ?", [cutoff_1y])
+if old_orders.len() > 0 {
+    db.batch_insert("orders_archive", old_orders)
+    db.query("DELETE FROM orders WHERE status = 'completed' AND created_at < ?", [cutoff_1y])
+    results.archived_orders = old_orders.len()
+}
+
+# Run VACUUM to reclaim space
+db.query("VACUUM", [])
+
+# Report
+print("Cleanup complete:")
+print("  Sessions deleted   : {results.sessions ?? 0}")
+print("  Error logs deleted : {results.error_logs ?? 0}")
+print("  Soft-deleted posts : {results.soft_deleted ?? 0}")
+print("  Orders archived    : {results.archived_orders ?? 0}")

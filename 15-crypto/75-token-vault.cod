@@ -1,0 +1,73 @@
+# Token Vault — Secure Credential Storage
+# Store, retrieve, and rotate sensitive tokens encrypted at rest
+# codong run 75-token-vault.cod
+
+MASTER_KEY = env.get("VAULT_MASTER_KEY") ?? "vault-master-key-32-bytes-padded"
+
+db.connect("sqlite:///vault.db")
+db.query("CREATE TABLE IF NOT EXISTS vault (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT UNIQUE NOT NULL,
+    ciphertext TEXT NOT NULL,
+    version    INTEGER DEFAULT 1,
+    created_at TEXT,
+    updated_at TEXT
+)", [])
+
+fn vault_set(name, value) {
+    encrypted  = crypto.aes_encrypt(value, MASTER_KEY)
+    ts         = time.now().format("YYYY-MM-DD HH:mm:ss")
+    existing   = db.query("SELECT id, version FROM vault WHERE name = ?", [name])
+
+    if existing.len() > 0 {
+        db.query("UPDATE vault SET ciphertext = ?, version = ?, updated_at = ? WHERE name = ?",
+            [encrypted, existing[0].version + 1, ts, name])
+        print("  Updated: {name} (v{existing[0].version + 1})")
+    } else {
+        db.query("INSERT INTO vault (name, ciphertext, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            [name, encrypted, ts, ts])
+        print("  Created: {name}")
+    }
+}
+
+fn vault_get(name) {
+    rows = db.query("SELECT ciphertext FROM vault WHERE name = ?", [name])
+    if rows.len() == 0 { return nil }
+    return crypto.aes_decrypt(rows[0].ciphertext, MASTER_KEY)
+}
+
+fn vault_list() {
+    rows = db.query("SELECT name, version, updated_at FROM vault ORDER BY name", [])
+    return rows
+}
+
+fn vault_rotate_master(new_key) {
+    # Re-encrypt all values under the new master key
+    rows = db.query("SELECT name, ciphertext FROM vault", [])
+    rows.each(fn(row) {
+        plaintext  = crypto.aes_decrypt(row.ciphertext, MASTER_KEY)
+        new_cipher = crypto.aes_encrypt(plaintext, new_key)
+        db.query("UPDATE vault SET ciphertext = ?, updated_at = ? WHERE name = ?",
+            [new_cipher, time.now().format("YYYY-MM-DD HH:mm:ss"), row.name])
+    })
+    print("Rotated master key for {rows.len()} secrets.")
+}
+
+# Demo
+print("── Vault Demo ──────────────────────────\n")
+
+vault_set("STRIPE_SECRET_KEY",    "sk_live_abc123xyz")
+vault_set("SENDGRID_API_KEY",     "SG.very_long_key_here")
+vault_set("DATABASE_URL",         "postgres://user:pass@host/db")
+vault_set("ANTHROPIC_API_KEY",    "sk-ant-api-key")
+
+print("\nStored secrets:")
+vault_list().each(fn(s) {
+    print("  {s.name}  (v{s.version}, updated {s.updated_at})")
+})
+
+print("\nRetrieving secrets:")
+print("  STRIPE_SECRET_KEY = {vault_get('STRIPE_SECRET_KEY')}")
+print("  DATABASE_URL      = {vault_get('DATABASE_URL')}")
+
+print("\nNon-existent key: {vault_get('MISSING_KEY') ?? 'nil'}")

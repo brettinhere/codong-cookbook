@@ -1,0 +1,115 @@
+# Decorator Pattern
+# Wrap functions with logging, timing, retry, cache, and rate-limit decorators
+# codong run 88-decorator-pattern.cod
+
+# ── Core Decorators ───────────────────────────────────────────────────────────
+
+fn with_logging(fn_name, f) {
+    return fn(...args) {
+        print("[LOG] {fn_name}({args.map(fn(a) { str(a) }).join(', ')})")
+        result = f(...args)
+        print("[LOG] {fn_name} → {str(result)}")
+        return result
+    }
+}
+
+fn with_timing(fn_name, f) {
+    return fn(...args) {
+        start  = time.unix_ms()
+        result = f(...args)
+        ms     = time.unix_ms() - start
+        print("[TIME] {fn_name} took {ms}ms")
+        return result
+    }
+}
+
+fn with_retry(f, max_retries, delay_ms) {
+    return fn(...args) {
+        attempt = 0
+        while attempt <= max_retries {
+            result = try(fn() { f(...args) })
+            if !result.is_err() { return result.value() }
+            attempt = attempt + 1
+            if attempt <= max_retries {
+                print("[RETRY] attempt {attempt}/{max_retries} after error: {result.error()}")
+                time.sleep(delay_ms)
+            }
+        }
+        error("max retries exceeded")
+    }
+}
+
+fn with_cache(f, ttl_ms) {
+    cache = {}
+    return fn(...args) {
+        key = args.map(fn(a) { str(a) }).join(":")
+        entry = cache[key] ?? nil
+        if entry != nil and (time.unix_ms() - entry.ts) < ttl_ms {
+            print("[CACHE] hit: {key}")
+            return entry.value
+        }
+        result = f(...args)
+        cache[key] = {value: result, ts: time.unix_ms()}
+        print("[CACHE] miss: {key} — stored")
+        return result
+    }
+}
+
+fn with_rate_limit(f, max_calls, window_ms) {
+    calls = []
+    return fn(...args) {
+        now    = time.unix_ms()
+        calls  = calls.filter(fn(t) { now - t < window_ms })
+        if calls.len() >= max_calls {
+            error("rate limit exceeded ({max_calls} calls per {window_ms}ms)")
+        }
+        calls.push(now)
+        return f(...args)
+    }
+}
+
+# ── Demo ──────────────────────────────────────────────────────────────────────
+
+fn slow_add(a, b) {
+    time.sleep(50)
+    return a + b
+}
+
+fn flaky_fetch(url) {
+    if math.random() < 0.6 { error("connection timeout") }
+    return {status: 200, body: "ok from {url}"}
+}
+
+print("── Logging + Timing ────────────────────────")
+logged_add = with_logging("add", slow_add)
+timed_add  = with_timing("add", logged_add)
+timed_add(3, 7)
+
+print("\n── Cache decorator ─────────────────────────")
+cached_add = with_cache(slow_add, 5000)
+cached_add(10, 20)  # miss
+cached_add(10, 20)  # hit
+cached_add(10, 20)  # hit
+cached_add(5, 15)   # miss
+
+print("\n── Retry decorator ─────────────────────────")
+resilient_fetch = with_retry(flaky_fetch, 4, 100)
+result = try(fn() { resilient_fetch("https://api.example.com/data") })
+if result.is_err() {
+    print("Failed after all retries: {result.error()}")
+} else {
+    print("Success: {result.value().status}")
+}
+
+print("\n── Rate limiter ────────────────────────────")
+limited = with_rate_limit(fn(x) { x * 2 }, 3, 1000)
+i = 0
+while i < 5 {
+    r = try(fn() { limited(i) })
+    if r.is_err() {
+        print("  call #{i+1}: BLOCKED — {r.error()}")
+    } else {
+        print("  call #{i+1}: {r.value()}")
+    }
+    i = i + 1
+}

@@ -1,0 +1,91 @@
+# WebSocket Multiplayer Game Server
+# Simple shared canvas: players move a dot, positions broadcast to all
+# codong run 65-ws-game-server.cod
+
+server  = web.serve(port: 4004)
+players = {}   # ws_id -> {x, y, color, name}
+
+COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
+color_idx = 0
+
+fn next_color() {
+    c = COLORS[color_idx % COLORS.len()]
+    color_idx = color_idx + 1
+    return c
+}
+
+fn broadcast_state() {
+    state = players.values().map(fn(p) { p })
+    msg   = json.encode({type: "state", players: state})
+    players.each(fn(id, _) { /* broadcast via ws handle */ })
+    return msg
+}
+
+server.ws("/game", fn(ws) {
+    id    = ws.id()
+    color = next_color()
+    name  = "Player#{id.slice(0, 4)}"
+
+    players[id] = {
+        id    : id,
+        name  : name,
+        color : color,
+        x     : math.floor(math.random() * 800),
+        y     : math.floor(math.random() * 600),
+    }
+
+    print("{name} joined ({players.keys().len()} players)")
+
+    # Welcome this player
+    ws.send(json.encode({
+        type  : "welcome",
+        id    : id,
+        name  : name,
+        color : color,
+        state : players.values(),
+    }))
+
+    # Notify all others
+    ws.broadcast("game", json.encode({
+        type   : "player_joined",
+        player : players[id],
+        count  : players.keys().len(),
+    }))
+
+    ws.on("message", fn(msg) {
+        data = json.parse(msg)
+
+        if data.type == "move" {
+            # Clamp to canvas bounds
+            players[id].x = math.max(0, math.min(800, data.x ?? players[id].x))
+            players[id].y = math.max(0, math.min(600, data.y ?? players[id].y))
+
+            ws.broadcast("game", json.encode({
+                type : "move",
+                id   : id,
+                x    : players[id].x,
+                y    : players[id].y,
+            }))
+        }
+
+        if data.type == "chat" {
+            ws.broadcast("game", json.encode({
+                type : "chat",
+                from : name,
+                text : data.text,
+            }))
+        }
+    })
+
+    ws.on("close", fn() {
+        players.delete(id)
+        ws.broadcast("game", json.encode({
+            type  : "player_left",
+            id    : id,
+            count : players.keys().len(),
+        }))
+        print("{name} left")
+    })
+})
+
+print("Game server on ws://localhost:4004/game  ({players.keys().len()} players)")

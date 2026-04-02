@@ -1,0 +1,103 @@
+# Matrix Operations
+# Addition, multiplication, transpose, determinant, dot product
+# codong run 82-matrix-operations.cod
+
+fn mat_create(rows, cols, fill) {
+    m = []
+    i = 0
+    while i < rows {
+        row = []
+        j   = 0
+        while j < cols {
+            row.push(fill)
+            j = j + 1
+        }
+        m.push(row)
+        i = i + 1
+    }
+    return m
+}
+
+fn mat_add(A, B) {
+    return A.map_with_index(fn(row, i) {
+        row.map_with_index(fn(v, j) { v + B[i][j] })
+    })
+}
+
+fn mat_scalar(A, s) {
+    return A.map(fn(row) { row.map(fn(v) { v * s }) })
+}
+
+fn mat_transpose(A) {
+    rows = A.len()
+    cols = A[0].len()
+    T    = mat_create(cols, rows, 0)
+    i = 0
+    while i < rows {
+        j = 0
+        while j < cols {
+            T[j][i] = A[i][j]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return T
+}
+
+fn mat_mul(A, B) {
+    rows_a = A.len()
+    cols_a = A[0].len()
+    cols_b = B[0].len()
+    C      = mat_create(rows_a, cols_b, 0)
+    i = 0
+    while i < rows_a {
+        j = 0
+        while j < cols_b {
+            k = 0
+            while k < cols_a {
+                C[i][j] = C[i][j] + A[i][k] * B[k][j]
+                k = k + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return C
+}
+
+fn determinant_2x2(A) {
+    return A[0][0] * A[1][1] - A[0][1] * A[1][0]
+}
+
+fn mat_print(A, label) {
+    print("{label}:")
+    A.each(fn(row) {
+        formatted = row.map(fn(v) { str(v).pad_start(6) }).join(" ")
+        print("  [{formatted} ]")
+    })
+    print("")
+}
+
+fn dot(a, b) {
+    return a.zip(b).reduce(fn(acc, pair) { acc + pair[0] * pair[1] }, 0)
+}
+
+# ── Demo ─────────────────────────────────────────────────────────────────────
+
+A = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+B = [[9, 8, 7], [6, 5, 4], [3, 2, 1]]
+C = [[1, 2], [3, 4], [5, 6]]
+
+mat_print(A, "A")
+mat_print(B, "B")
+mat_print(mat_add(A, B),       "A + B")
+mat_print(mat_scalar(A, 2),    "A × 2")
+mat_print(mat_transpose(C),    "Transpose(C)")
+mat_print(mat_mul(A, B),       "A × B")
+
+M = [[3, 8], [4, 6]]
+print("det(M) = {determinant_2x2(M)}")   # 3*6 - 8*4 = -14
+
+v1 = [1, 2, 3]
+v2 = [4, 5, 6]
+print("dot([1,2,3], [4,5,6]) = {dot(v1, v2)}")  # 32

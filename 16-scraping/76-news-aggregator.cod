@@ -1,0 +1,74 @@
+# News Aggregator — RSS + HTTP Scraping
+# Fetch headlines from multiple RSS feeds, deduplicate, store to DB
+# codong run 76-news-aggregator.cod
+
+db.connect("sqlite:///news.db")
+db.query("CREATE TABLE IF NOT EXISTS articles (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT,
+    title      TEXT,
+    url        TEXT UNIQUE,
+    summary    TEXT,
+    published  TEXT,
+    fetched_at TEXT
+)", [])
+
+FEEDS = [
+    {name: "Hacker News",  url: "https://news.ycombinator.com/rss"},
+    {name: "TechCrunch",   url: "https://techcrunch.com/feed/"},
+    {name: "The Verge",    url: "https://www.theverge.com/rss/index.xml"},
+]
+
+fn fetch_feed(feed) {
+    resp = http.get(feed.url, timeout: 10000)
+    if resp.is_err() {
+        print("  ✗ {feed.name}: {resp.error()}")
+        return []
+    }
+
+    items = xml.parse_rss(resp.body)
+    print("  ✓ {feed.name}: {items.len()} items")
+    return items.map(fn(item) {
+        {
+            source    : feed.name,
+            title     : item.title ?? "",
+            url       : item.link  ?? "",
+            summary   : item.description.strip_tags().slice(0, 300) ?? "",
+            published : item.pub_date ?? time.now().format("YYYY-MM-DD"),
+        }
+    })
+}
+
+fn save_articles(articles) {
+    new_count = 0
+    articles.each(fn(a) {
+        existing = db.query("SELECT id FROM articles WHERE url = ?", [a.url])
+        if existing.len() == 0 and a.url != "" {
+            db.query("INSERT INTO articles (source, title, url, summary, published, fetched_at)
+                      VALUES (?, ?, ?, ?, ?, ?)",
+                [a.source, a.title, a.url, a.summary, a.published,
+                 time.now().format("YYYY-MM-DD HH:mm:ss")])
+            new_count = new_count + 1
+        }
+    })
+    return new_count
+}
+
+print("Fetching news feeds ...\n")
+total_new = 0
+
+FEEDS.each(fn(feed) {
+    articles  = fetch_feed(feed)
+    new_count = save_articles(articles)
+    total_new = total_new + new_count
+    print("     → {new_count} new articles saved\n")
+})
+
+print("Total new articles: {total_new}")
+
+# Show latest 5
+latest = db.query("SELECT source, title, published FROM articles ORDER BY id DESC LIMIT 5", [])
+print("\n── Latest Headlines ──────────────────────")
+latest.each(fn(a) {
+    print("  [{a.source}] {a.title.slice(0, 70)}")
+})

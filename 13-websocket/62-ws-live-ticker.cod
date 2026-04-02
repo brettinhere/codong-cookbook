@@ -1,0 +1,67 @@
+# WebSocket Live Price Ticker
+# Streams simulated stock prices to all connected clients every second
+# codong run 62-ws-live-ticker.cod
+
+server = web.serve(port: 4001)
+
+# Simulated stock prices
+prices = {
+    AAPL  : 185.42,
+    GOOGL : 140.18,
+    TSLA  : 248.73,
+    MSFT  : 415.22,
+    NVDA  : 875.60,
+}
+
+fn random_delta() {
+    # Small random walk: ±0.5%
+    return (math.random() - 0.5) * 0.01
+}
+
+fn tick_prices() {
+    prices.each(fn(sym, price) {
+        change     = price * random_delta()
+        prices[sym] = (price + change).round(2)
+    })
+    return prices
+}
+
+# Serve a simple HTML client
+server.get("/", fn(req, res) {
+    html = fs.read("62-ticker-client.html")
+    res.html(html)
+})
+
+# REST snapshot
+server.get("/prices", fn(req, res) {
+    res.json(prices)
+})
+
+# WebSocket stream
+server.ws("/stream", fn(ws) {
+    id = ws.id()
+    print("Client {id} connected to ticker")
+
+    # Send current prices immediately
+    ws.send(json.encode({type: "snapshot", prices: prices}))
+
+    # Tick every second
+    timer = ws.interval(1000, fn() {
+        updated = tick_prices()
+        ws.send(json.encode({type: "tick", prices: updated, ts: time.now().format("HH:mm:ss")}))
+    })
+
+    ws.on("message", fn(msg) {
+        data = json.parse(msg)
+        if data.type == "subscribe" {
+            print("Client {id} subscribed to: {data.symbols.join(', ')}")
+        }
+    })
+
+    ws.on("close", fn() {
+        timer.stop()
+        print("Client {id} disconnected")
+    })
+})
+
+print("Price ticker on ws://localhost:4001/stream")

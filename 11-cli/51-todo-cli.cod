@@ -1,0 +1,75 @@
+# CLI Todo Manager
+# Full-featured command-line todo app with subcommands
+# codong run 51-todo-cli.cod -- add "Buy groceries"
+# codong run 51-todo-cli.cod -- list
+# codong run 51-todo-cli.cod -- done 1
+# codong run 51-todo-cli.cod -- delete 1
+
+DB_FILE = "todos.db"
+
+db.connect("sqlite:///{DB_FILE}")
+db.query("CREATE TABLE IF NOT EXISTS todos (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    text    TEXT NOT NULL,
+    done    INTEGER DEFAULT 0,
+    created TEXT
+)", [])
+
+fn add_todo(text) {
+    db.query("INSERT INTO todos (text, created) VALUES (?, ?)",
+        [text, time.now().format("YYYY-MM-DD HH:mm")])
+    print("✓ Added: {text}")
+}
+
+fn list_todos() {
+    rows = db.query("SELECT * FROM todos ORDER BY id ASC", [])
+    if rows.len() == 0 {
+        print("No todos yet. Add one with: codong run 51-todo-cli.cod -- add \"your task\"")
+        return
+    }
+    print("\n── Todo List ──────────────────────")
+    rows.each(fn(row) {
+        status = "[ ]"
+        if row.done == 1 { status = "[x]" }
+        print("{status} {row.id}. {row.text}  ({row.created})")
+    })
+    total  = rows.len()
+    done   = rows.filter(fn(r) { r.done == 1 }).len()
+    print("───────────────────────────────────")
+    print("{done}/{total} completed\n")
+}
+
+fn mark_done(id) {
+    db.query("UPDATE todos SET done = 1 WHERE id = ?", [id])
+    print("✓ Marked #{id} as done")
+}
+
+fn delete_todo(id) {
+    db.query("DELETE FROM todos WHERE id = ?", [id])
+    print("✓ Deleted #{id}")
+}
+
+fn clear_done() {
+    db.query("DELETE FROM todos WHERE done = 1", [])
+    print("✓ Cleared all completed todos")
+}
+
+# Parse CLI args
+args = env.args()
+cmd  = args[0] ?? "list"
+
+match cmd {
+    "add"    => add_todo(args[1] ?? "New task")
+    "list"   => list_todos()
+    "done"   => mark_done(args[1] ?? "1")
+    "delete" => delete_todo(args[1] ?? "1")
+    "clear"  => clear_done()
+    _ => {
+        print("Usage:")
+        print("  codong run 51-todo-cli.cod -- add \"task text\"")
+        print("  codong run 51-todo-cli.cod -- list")
+        print("  codong run 51-todo-cli.cod -- done <id>")
+        print("  codong run 51-todo-cli.cod -- delete <id>")
+        print("  codong run 51-todo-cli.cod -- clear")
+    }
+}

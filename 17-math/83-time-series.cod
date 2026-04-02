@@ -1,0 +1,83 @@
+# Time Series Analysis
+# Moving average, exponential smoothing, trend detection, anomaly detection
+# codong run 83-time-series.cod
+
+fn sma(data, window) {
+    # Simple Moving Average
+    result = []
+    i = window - 1
+    while i < data.len() {
+        slice = data.slice(i - window + 1, i + 1)
+        result.push(slice.reduce(fn(a, b) { a + b }, 0) / window)
+        i = i + 1
+    }
+    return result
+}
+
+fn ema(data, alpha) {
+    # Exponential Moving Average
+    result = [data[0]]
+    i      = 1
+    while i < data.len() {
+        val = alpha * data[i] + (1 - alpha) * result[i - 1]
+        result.push(val.round(4))
+        i = i + 1
+    }
+    return result
+}
+
+fn detect_trend(data, window) {
+    # Classify as "up", "down", or "flat" based on linear regression slope
+    if data.len() < window { return "insufficient_data" }
+    recent = data.slice(data.len() - window, data.len())
+    n      = recent.len()
+    xs     = []
+    i = 0
+    while i < n { xs.push(i); i = i + 1 }
+    sum_x  = xs.reduce(fn(a, b) { a + b }, 0)
+    sum_y  = recent.reduce(fn(a, b) { a + b }, 0)
+    sum_xy = xs.zip(recent).reduce(fn(acc, p) { acc + p[0] * p[1] }, 0)
+    sum_x2 = xs.reduce(fn(acc, x) { acc + x * x }, 0)
+    slope  = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
+    if slope > 0.5  { return "up" }
+    if slope < -0.5 { return "down" }
+    return "flat"
+}
+
+fn detect_anomalies(data, threshold) {
+    # Flag points more than threshold standard deviations from the mean
+    mean   = data.reduce(fn(a, b) { a + b }, 0) / data.len()
+    sq_dev = data.map(fn(x) { (x - mean) ** 2 })
+    std    = math.sqrt(sq_dev.reduce(fn(a, b) { a + b }, 0) / data.len())
+    return data.map_with_index(fn(x, i) {
+        z = (x - mean).abs() / std
+        {index: i, value: x, z_score: z.round(2), anomaly: z > threshold}
+    }).filter(fn(p) { p.anomaly })
+}
+
+# ── Simulated daily revenue data ─────────────────────────────────────────────
+revenue = [120, 132, 141, 138, 155, 148, 162, 170, 158, 175,
+           180, 195, 188, 202, 210, 198, 215, 228, 220, 240,
+           50,  # ← anomaly (system outage)
+           245, 258, 262, 270, 265, 280, 292, 300, 310]
+
+print("Revenue (30 days):")
+print(revenue)
+print("")
+
+sma5  = sma(revenue, 5)
+sma10 = sma(revenue, 10)
+ema_  = ema(revenue, 0.3)
+
+print("SMA(5)  last 5 values : {sma5.slice(sma5.len()-5, sma5.len()).map(fn(v) { v.round(1) })}")
+print("SMA(10) last 5 values : {sma10.slice(sma10.len()-5, sma10.len()).map(fn(v) { v.round(1) })}")
+print("EMA(0.3) last 5 values: {ema_.slice(ema_.len()-5, ema_.len())}")
+
+trend = detect_trend(revenue, 7)
+print("\nTrend (last 7 days)  : {trend}")
+
+anomalies = detect_anomalies(revenue, 2.5)
+print("\nAnomalies detected   : {anomalies.len()}")
+anomalies.each(fn(a) {
+    print("  Day {a.index + 1}: value={a.value}  z={a.z_score}")
+})

@@ -1,0 +1,105 @@
+# Dead-Letter Queue (DLQ) Pattern
+# Jobs that fail 3 times move to DLQ; inspector reviews and replays
+# codong run 69-dead-letter-queue.cod -- worker
+# codong run 69-dead-letter-queue.cod -- inspect
+# codong run 69-dead-letter-queue.cod -- replay
+
+redis.connect(env.get("REDIS_URL") ?? "redis://localhost:6379")
+
+QUEUE  = "dlq:main"
+DLQ    = "dlq:failed"
+MAX_RETRIES = 3
+
+fn enqueue(type, payload) {
+    redis.lpush(QUEUE, json.encode({
+        id: str(time.unix() * 1000),
+        type: type,
+        payload: payload,
+        retries: 0,
+        errors: [],
+    }))
+}
+
+fn process(job) {
+    # Simulate: "broken_job" always fails
+    if job.type == "broken_job" {
+        error("simulated failure")
+    }
+    if job.type == "flaky_job" and math.random() < 0.6 {
+        error("random transient failure")
+    }
+    print("  ✓  Processed: {job.type}")
+    return true
+}
+
+fn run_worker() {
+    # Seed test jobs
+    enqueue("good_job",   {value: 1})
+    enqueue("broken_job", {value: 2})
+    enqueue("flaky_job",  {value: 3})
+    enqueue("good_job",   {value: 4})
+
+    print("Worker running ...\n")
+    processed = 0
+    while true {
+        raw = redis.brpop(QUEUE, timeout: 2)
+        if raw == "" { break }
+
+        job = json.parse(raw)
+        ok  = false
+        err_msg = ""
+
+        # Try to process
+        result = try(fn() { process(job) })
+        if result.is_err() {
+            err_msg = result.error()
+        } else {
+            ok = true
+            processed = processed + 1
+        }
+
+        if !ok {
+            job.retries = job.retries + 1
+            job.errors.push({ts: time.now().format("HH:mm:ss"), msg: err_msg})
+            if job.retries < MAX_RETRIES {
+                redis.lpush(QUEUE, json.encode(job))
+                print("  ↺  Retry {job.retries}/{MAX_RETRIES}: {job.type}")
+            } else {
+                redis.lpush(DLQ, json.encode(job))
+                print("  ✗  DLQ: {job.type} after {MAX_RETRIES} retries")
+            }
+        }
+    }
+    print("\nDone. Processed: {processed} | Queue empty.")
+}
+
+fn inspect_dlq() {
+    items = redis.lrange(DLQ, 0, -1)
+    print("\n── Dead-Letter Queue ({items.len()} items) ──────")
+    items.each_with_index(fn(raw, i) {
+        job = json.parse(raw)
+        print("\n[{i}] type={job.type}  retries={job.retries}")
+        job.errors.each(fn(e) { print("     {e.ts}: {e.msg}") })
+    })
+}
+
+fn replay_dlq() {
+    items = redis.lrange(DLQ, 0, -1)
+    redis.del(DLQ)
+    items.each(fn(raw) {
+        job = json.parse(raw)
+        job.retries = 0
+        job.errors  = []
+        redis.lpush(QUEUE, json.encode(job))
+        print("  Replayed: {job.type}")
+    })
+    print("Replayed {items.len()} jobs back to main queue.")
+}
+
+cmd = env.args()[0] ?? "worker"
+match cmd {
+    "worker"  => run_worker()
+    "inspect" => inspect_dlq()
+    "replay"  => replay_dlq()
+    _ => print("Usage: codong run 69-dead-letter-queue.cod -- [worker|inspect|replay]")
+}

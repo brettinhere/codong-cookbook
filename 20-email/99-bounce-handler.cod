@@ -1,0 +1,107 @@
+# Email Bounce & Complaint Handler
+# Receive bounce/complaint webhooks from SendGrid/SES, update DB suppression list
+# codong run 99-bounce-handler.cod
+
+db.connect("sqlite:///email.db")
+db.query("CREATE TABLE IF NOT EXISTS email_suppressions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    email        TEXT UNIQUE,
+    reason       TEXT,   -- 'bounce_hard', 'bounce_soft', 'complaint', 'unsubscribe'
+    provider     TEXT,
+    raw_event    TEXT,
+    suppressed_at TEXT
+)", [])
+
+db.query("CREATE TABLE IF NOT EXISTS email_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT,
+    event_type  TEXT,
+    provider    TEXT,
+    message_id  TEXT,
+    ts          TEXT
+)", [])
+
+server = web.serve(port: 3033)
+
+fn suppress(email_addr, reason, provider, raw) {
+    ts = time.now().format("YYYY-MM-DD HH:mm:ss")
+    db.query("INSERT OR REPLACE INTO email_suppressions (email, reason, provider, raw_event, suppressed_at)
+              VALUES (?, ?, ?, ?, ?)", [email_addr, reason, provider, json.encode(raw), ts])
+    print("  → Suppressed: {email_addr} ({reason})")
+}
+
+fn log_event(email_addr, event_type, provider, message_id) {
+    db.query("INSERT INTO email_events (email, event_type, provider, message_id, ts)
+              VALUES (?, ?, ?, ?, ?)",
+        [email_addr, event_type, provider, message_id ?? "", time.now().format("YYYY-MM-DD HH:mm:ss")])
+}
+
+# SendGrid webhook
+server.post("/webhooks/sendgrid", fn(req, res) {
+    events = req.json()
+    if events.type() != "list" { events = [events] }
+
+    events.each(fn(ev) {
+        addr  = ev.email ?? ""
+        type  = ev.event ?? ""
+        mid   = ev.sg_message_id ?? ""
+        log_event(addr, type, "sendgrid", mid)
+
+        match type {
+            "bounce" => {
+                reason = ev.type == "bounce" ? "bounce_hard" : "bounce_soft"
+                suppress(addr, reason, "sendgrid", ev)
+            }
+            "spamreport" => suppress(addr, "complaint", "sendgrid", ev)
+            "unsubscribe" => suppress(addr, "unsubscribe", "sendgrid", ev)
+            _ => print("  Event: {type} for {addr}")
+        }
+    })
+    res.json({ok: true, processed: events.len()})
+})
+
+# AWS SES / SNS webhook
+server.post("/webhooks/ses", fn(req, res) {
+    sns_msg = req.json()
+    # SNS wraps the SES notification in a Message string
+    msg  = json.parse(sns_msg.Message ?? "{}")
+    type = msg.notificationType ?? ""
+    ts   = time.now().format("YYYY-MM-DD HH:mm:ss")
+
+    if type == "Bounce" {
+        msg.bounce.bouncedRecipients.each(fn(r) {
+            reason = msg.bounce.bounceType == "Permanent" ? "bounce_hard" : "bounce_soft"
+            suppress(r.emailAddress, reason, "ses", msg)
+        })
+    }
+    if type == "Complaint" {
+        msg.complaint.complainedRecipients.each(fn(r) {
+            suppress(r.emailAddress, "complaint", "ses", msg)
+        })
+    }
+    res.json({ok: true})
+})
+
+# Query suppression list
+server.get("/suppressions", fn(req, res) {
+    rows = db.query("SELECT email, reason, provider, suppressed_at
+                     FROM email_suppressions ORDER BY suppressed_at DESC LIMIT 100", [])
+    res.json({count: rows.len(), suppressions: rows})
+})
+
+fn is_suppressed(email_addr) {
+    rows = db.query("SELECT id FROM email_suppressions WHERE email = ?", [email_addr])
+    return rows.len() > 0
+}
+
+# Middleware: check before sending
+server.get("/check/:email", fn(req, res) {
+    addr = req.param("email")
+    res.json({email: addr, suppressed: is_suppressed(addr)})
+})
+
+print("Bounce handler on http://localhost:3033")
+print("POST /webhooks/sendgrid  — SendGrid events")
+print("POST /webhooks/ses       — AWS SES SNS events")
+print("GET  /suppressions       — list suppressed emails")
+print("GET  /check/:email       — check if email is suppressed")

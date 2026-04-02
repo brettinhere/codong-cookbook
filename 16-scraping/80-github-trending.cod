@@ -1,0 +1,85 @@
+# GitHub Trending Scraper
+# Fetch today's trending repos, store to DB, expose as API
+# codong run 80-github-trending.cod
+
+db.connect("sqlite:///trending.db")
+db.query("CREATE TABLE IF NOT EXISTS trending_repos (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo         TEXT,
+    description  TEXT,
+    language     TEXT,
+    stars        INTEGER,
+    stars_today  INTEGER,
+    url          TEXT,
+    fetched_date TEXT
+)", [])
+
+fn fetch_trending(language) {
+    url  = language != "" ?
+        "https://github.com/trending/{language}?since=daily" :
+        "https://github.com/trending?since=daily"
+
+    resp = http.get(url, timeout: 15000, headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; TrendingBot)"
+    })
+    if resp.is_err() { return [] }
+
+    # Parse article elements from the trending page
+    items = resp.body.css("article.Box-row").map(fn(el) {
+        repo_link = el.css("h2 a").first()
+        desc_el   = el.css("p")
+        lang_el   = el.css("[itemprop='programmingLanguage']").first()
+        stars_el  = el.css("a[href$='/stargazers']").first()
+        today_el  = el.css(".float-sm-right").first()
+
+        {
+            repo        : repo_link.attr("href").trim_start("/") ?? "",
+            description : desc_el.text().trim() ?? "",
+            language    : lang_el.text().trim() ?? language,
+            stars       : int(stars_el.text().replace(",", "").trim()) ?? 0,
+            stars_today : int(today_el.text().replace(",", "").replace("stars today", "").trim()) ?? 0,
+            url         : "https://github.com/{repo_link.attr('href').trim_start('/')}",
+        }
+    })
+
+    return items
+}
+
+fn save_repos(repos) {
+    today = time.now().format("YYYY-MM-DD")
+    # Remove today's existing entries to refresh
+    db.query("DELETE FROM trending_repos WHERE fetched_date = ?", [today])
+    db.batch_insert("trending_repos", repos.map(fn(r) {
+        r.fetched_date = today
+        return r
+    }))
+}
+
+# Fetch multiple language categories
+LANGUAGES = ["", "go", "python", "typescript", "rust"]
+all_repos  = []
+LANGUAGES.each(fn(lang) {
+    label = lang != "" ? lang : "all"
+    print("Fetching trending ({label}) ...")
+    repos = fetch_trending(lang)
+    print("  → {repos.len()} repos")
+    all_repos = all_repos.concat(repos)
+})
+
+save_repos(all_repos)
+print("\nSaved {all_repos.len()} trending repos.\n")
+
+# Serve as API
+server = web.serve(port: 3032)
+
+server.get("/trending", fn(req, res) {
+    lang  = req.query("lang") ?? ""
+    today = time.now().format("YYYY-MM-DD")
+    where = lang != "" ?
+        "fetched_date = '{today}' AND language = '{lang}'" :
+        "fetched_date = '{today}'"
+    repos = db.query("SELECT * FROM trending_repos WHERE {where} ORDER BY stars_today DESC LIMIT 25", [])
+    res.json({date: today, count: repos.len(), repos: repos})
+})
+
+print("API: GET http://localhost:3032/trending?lang=go")

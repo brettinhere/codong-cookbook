@@ -1,0 +1,97 @@
+# Weekly Email Digest Generator
+# Pull DB data, format as HTML digest, and send to a list of subscribers
+# codong run 98-email-digest.cod
+
+db.connect("sqlite:///app.db")
+
+FROM_EMAIL = env.get("FROM_EMAIL") ?? "digest@example.com"
+APP_NAME   = "Codong Weekly"
+
+fn build_digest_html(week, data) {
+    rows = data.top_posts.map(fn(p) {
+        "<tr>
+          <td style='padding:8px;'><a href='{p.url}'>{p.title}</a></td>
+          <td style='padding:8px;text-align:right;'>{p.views}</td>
+        </tr>"
+    }).join("\n")
+
+    return "
+<!DOCTYPE html>
+<html>
+<body style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;'>
+  <div style='background:#1d1d2e;padding:24px;text-align:center;'>
+    <h1 style='color:white;margin:0;font-size:20px;'>{APP_NAME}</h1>
+    <p style='color:#aaa;margin:8px 0 0;'>Week of {week}</p>
+  </div>
+
+  <div style='padding:24px;'>
+    <h2 style='color:#4f46e5;'>This Week at a Glance</h2>
+    <div style='display:flex;gap:16px;'>
+      <div style='flex:1;background:#f9fafb;padding:16px;border-radius:8px;text-align:center;'>
+        <div style='font-size:28px;font-weight:bold;color:#4f46e5;'>{data.new_users}</div>
+        <div style='color:#888;font-size:13px;'>New Users</div>
+      </div>
+      <div style='flex:1;background:#f9fafb;padding:16px;border-radius:8px;text-align:center;'>
+        <div style='font-size:28px;font-weight:bold;color:#059669;'>{data.revenue}</div>
+        <div style='color:#888;font-size:13px;'>Revenue</div>
+      </div>
+      <div style='flex:1;background:#f9fafb;padding:16px;border-radius:8px;text-align:center;'>
+        <div style='font-size:28px;font-weight:bold;color:#d97706;'>{data.new_orders}</div>
+        <div style='color:#888;font-size:13px;'>Orders</div>
+      </div>
+    </div>
+
+    <h2 style='color:#4f46e5;margin-top:28px;'>Top Content</h2>
+    <table style='width:100%;border-collapse:collapse;'>
+      <tr style='background:#f3f4f6;'>
+        <th style='padding:8px;text-align:left;'>Post</th>
+        <th style='padding:8px;text-align:right;'>Views</th>
+      </tr>
+      {rows}
+    </table>
+  </div>
+
+  <div style='padding:16px;background:#f9fafb;text-align:center;font-size:12px;color:#888;'>
+    <a href='{{unsubscribe_url}}'>Unsubscribe</a> ·
+    © {time.now().format('YYYY')} {APP_NAME}
+  </div>
+</body>
+</html>"
+}
+
+# Pull data
+week_start = time.now().add(days: -7).format("YYYY-MM-DD")
+week_label = week_start + " – " + time.now().format("YYYY-MM-DD")
+
+data = {
+    new_users  : db.count("users",  "created_at >= '{week_start}'"),
+    new_orders : db.count("orders", "created_at >= '{week_start}'"),
+    revenue    : "$" + str(db.sum("orders", "amount", "created_at >= '{week_start}' AND status='paid'") ?? 0),
+    top_posts  : db.query("SELECT title, url, view_count as views
+                           FROM posts WHERE published = 1
+                           ORDER BY view_count DESC LIMIT 5", []),
+}
+
+html = build_digest_html(week_label, data)
+
+# Get subscribers
+subscribers = db.query("SELECT email, name FROM subscribers WHERE digest_enabled = 1", [])
+print("Sending digest to {subscribers.len()} subscribers ...\n")
+
+sent = 0
+subscribers.each(fn(sub) {
+    personalized = html.replace("{{unsubscribe_url}}",
+        "https://example.com/unsubscribe?email={sub.email}")
+
+    email.send({
+        smtp: {host: env.get("SMTP_HOST"), user: env.get("SMTP_USER"), pass: env.get("SMTP_PASS")},
+        from: FROM_EMAIL,
+        to:   sub.email,
+        subject: "📊 {APP_NAME} — {week_label}",
+        html: personalized,
+    })
+    sent = sent + 1
+    print("  ✓ {sub.email}")
+})
+
+print("\n{sent} digests sent.")

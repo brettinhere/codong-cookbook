@@ -1,0 +1,83 @@
+# Statistics Library
+# mean, median, mode, variance, std dev, percentile, correlation
+# codong run 81-statistics-lib.cod
+
+fn mean(xs) {
+    return xs.reduce(fn(acc, x) { acc + x }, 0) / xs.len()
+}
+
+fn median(xs) {
+    sorted = xs.sort()
+    n      = sorted.len()
+    if n % 2 == 0 {
+        return (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+    }
+    return sorted[(n - 1) / 2]
+}
+
+fn mode(xs) {
+    counts = {}
+    xs.each(fn(x) {
+        key = str(x)
+        counts[key] = (counts[key] ?? 0) + 1
+    })
+    max_count = counts.values().reduce(fn(a, b) { a > b ? a : b }, 0)
+    modes = counts.keys().filter(fn(k) { counts[k] == max_count })
+    return modes.map(fn(k) { float(k) })
+}
+
+fn variance(xs) {
+    m   = mean(xs)
+    dev = xs.map(fn(x) { (x - m) ** 2 })
+    return mean(dev)
+}
+
+fn std_dev(xs) {
+    return math.sqrt(variance(xs))
+}
+
+fn percentile(xs, p) {
+    sorted = xs.sort()
+    idx    = (p / 100.0) * (sorted.len() - 1)
+    lo     = math.floor(idx)
+    hi     = math.ceil(idx)
+    if lo == hi { return sorted[lo] }
+    return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo])
+}
+
+fn z_score(xs) {
+    m  = mean(xs)
+    sd = std_dev(xs)
+    return xs.map(fn(x) { (x - m) / sd })
+}
+
+fn pearson_correlation(xs, ys) {
+    if xs.len() != ys.len() { error("lengths must match") }
+    mx  = mean(xs)
+    my  = mean(ys)
+    num = xs.zip(ys).reduce(fn(acc, pair) { acc + (pair[0] - mx) * (pair[1] - my) }, 0)
+    dx  = math.sqrt(xs.reduce(fn(a, x) { a + (x - mx) ** 2 }, 0))
+    dy  = math.sqrt(ys.reduce(fn(a, y) { a + (y - my) ** 2 }, 0))
+    return num / (dx * dy)
+}
+
+# ── Demo ─────────────────────────────────────────────────────────────────────
+
+data = [4, 7, 13, 16, 21, 21, 24, 28, 28, 28, 35, 40, 42]
+
+print("Dataset: {data}\n")
+print("Mean       : {mean(data).round(3)}")
+print("Median     : {median(data)}")
+print("Mode       : {mode(data)}")
+print("Variance   : {variance(data).round(3)}")
+print("Std Dev    : {std_dev(data).round(3)}")
+print("P25        : {percentile(data, 25)}")
+print("P50        : {percentile(data, 50)}")
+print("P75        : {percentile(data, 75)}")
+print("P99        : {percentile(data, 99)}")
+
+print("\nZ-scores   : {z_score(data).map(fn(z) { z.round(2) })}")
+
+xs = [1, 2, 3, 4, 5]
+ys = [2, 4, 5, 4, 5]
+print("\nPearson r(xs,ys) = {pearson_correlation(xs, ys).round(4)}")
